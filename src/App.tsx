@@ -49,6 +49,21 @@ export default function App() {
   const [cwd, setCwd] = useState<string>(defaultCwd());
   const [pid, setPid] = useState<number | null>(null);
   const [modelLabel, setModelLabel] = useState<string>("(no model)");
+  const [thinkingLevel, setThinkingLevel] = useState<string>("");
+  const [availableModels, setAvailableModels] = useState<Array<{
+    provider: string;
+    id: string;
+    name?: string;
+    reasoning?: boolean;
+    contextWindow?: number;
+  }>>([]);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // The set of thinking levels to cycle through. xhigh/max are exposed only
+  // when supported by the model, but we still list them so the cycle stays
+  // consistent.
+  const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState<string>("");
   const [pendingDialog, setPendingDialog] = useState<ExtensionUiRequest | null>(null);
@@ -61,6 +76,18 @@ export default function App() {
   // Always-fresh ref so the event handler (attached once) sees latest state.
   messagesRef.current = messages;
 
+  // Track the currently-streaming assistant message so message_update events
+  // (which carry NO top-level message.id) can find their target. RPC emits
+  // `responseId` on the message but not a stable `id` we can correlate by.
+  const currentAssistantIdRef = useRef<string | null>(null);
+  // Side-channel for tool inserts produced inside message_update.
+  const pendingToolInserts = useRef<ToolMessage[]>([]);
+
+  // Monotonic counter for state-refresh RPCs (get_state, get_available_models).
+  // Bumped on every user-initiated change that would trigger a refresh
+  // (switchModel, connect, pickCwd). Responses with a stale version are
+  // (Already declared above.)
+
   // Auto-scroll on new content.
   useEffect(() => {
     const el = scrollerRef.current;
@@ -71,9 +98,16 @@ export default function App() {
   // Initial status probe + subscribe to pi events for the whole app lifetime.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    // Guard: if the component unmounts before the async onPiEvent() resolves,
+    // the cleanup function has no fn to call, and the subscription leaks.
+    // The .then() will later install a listener that nobody ever cancels.
+    // When the component remounts (HMR page reload) a SECOND subscription
+    // is added, causing every text_delta to fire twice → word duplication.
+    let mounted = true;
 
     pi.getStatus()
       .then((s) => {
+        if (!mounted) return;
         if (s.running) {
           setStatus("ready");
           setCwd(s.cwd ?? cwd);
@@ -85,10 +119,17 @@ export default function App() {
     pi.onPiEvent((event) => {
       handleEvent(event);
     }).then((fn) => {
+      if (!mounted) {
+        // Component unmounted before the subscription was ready —
+        // cancel it immediately to prevent a leak.
+        fn();
+        return;
+      }
       unlisten = fn;
     });
 
     return () => {
+      mounted = false;
       unlisten?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,7 +159,13 @@ export default function App() {
           return;
         }
         if (msg.role === "assistant") {
-          const id = String(msg.id ?? uid());
+          // Guard: if we are already tracking a streaming assistant message,
+          // ignore this start (likely a duplicate event after HMR reload).
+          if (currentAssistantIdRef.current) {
+            return;
+          }
+          const id = uid();
+          currentAssistantIdRef.current = id;
           setMessages((prev) => {
             if (prev.some((m) => m.kind === "assistant" && m.id === id)) return prev;
             const next: AssistantMessage = {
@@ -137,12 +184,12 @@ export default function App() {
 
       case "message_update": {
         const ame = event.assistantMessageEvent as AssistantMessageEvent | undefined;
-        const msg = event.message;
-        if (!ame || !msg) return;
-        const id = String(msg.id);
+        if (!ame) return;
+        const targetId = currentAssistantIdRef.current;
+        if (!targetId) return;
         setMessages((prev) =>
           prev.map((m) => {
-            if (m.kind !== "assistant" || m.id !== id) return m;
+            if (m.kind !== "assistant" || m.id !== targetId) return m;
             if (ame.type === "text_delta" && typeof ame.delta === "string") {
               return { ...m, text: m.text + ame.delta };
             }
@@ -179,14 +226,15 @@ export default function App() {
       }
 
       case "message_end": {
-        const msg = event.message;
-        if (!msg) return;
-        const id = String(msg.id);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.kind === "assistant" && m.id === id ? { ...m, isStreaming: false } : m,
-          ),
-        );
+        const id = currentAssistantIdRef.current;
+        if (id) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.kind === "assistant" && m.id === id ? { ...m, isStreaming: false } : m,
+            ),
+          );
+          currentAssistantIdRef.current = null;
+        }
         return;
       }
 
@@ -218,11 +266,43 @@ export default function App() {
       }
 
       case "response": {
-        // Command responses (e.g. set_model) - ignore for now.
-        if (event.command === "set_model" && event.success && event.data) {
-          const d = event.data as { model?: { provider?: string; id?: string; name?: string } };
-          if (d.model) {
-            setModelLabel(`${d.model.provider ?? ""}/${d.model.id ?? d.model.name ?? ""}`);
+        // Command responses.
+        if (event.success && event.data) {
+          const data = event.data as {
+            model?: { provider?: string; id?: string; name?: string; reasoning?: boolean };
+            thinkingLevel?: string;
+            models?: Array<{
+              provider: string;
+              id: string;
+              name?: string;
+              reasoning?: boolean;
+              contextWindow?: number;
+            }>;
+          };
+
+          if (event.command === "get_state") {
+            if (data.model && (data.model.provider || data.model.id)) {
+              const m2 = data.model;
+              const label = `${m2.provider ?? ""}/${m2.id ?? m2.name ?? ""}`;
+              setModelLabel(label);
+              if (typeof data.thinkingLevel === "string") {
+                setThinkingLevel(data.thinkingLevel);
+              }
+              setNotice(`ready · ${label}${data.thinkingLevel ? ` · ${data.thinkingLevel}` : ""}`);
+              setTimeout(() => setNotice(null), 3000);
+            }
+          }
+          // NOTE: set_model response is intentionally NOT used to update
+          // the topbar. Its `data` shape differs from get_state.
+
+          if (event.command === "get_available_models") {
+            if (Array.isArray(data.models)) {
+              setAvailableModels(data.models);
+              if (data.models.length > 0) {
+                setNotice(`${data.models.length} model(s) available`);
+                setTimeout(() => setNotice(null), 2500);
+              }
+            }
           }
         }
         if (!event.success && event.error) {
@@ -239,7 +319,21 @@ export default function App() {
   }, []);
 
   // Side-channel for tool inserts produced inside message_update.
-  const pendingToolInserts = useRef<ToolMessage[]>([]);
+  // (Already declared above.)
+
+  // Close the model dropdown when clicking outside of it.
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (dropdownRef.current && t && !dropdownRef.current.contains(t)) {
+        setModelMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [modelMenuOpen]);
+
 
   const connect = useCallback(async () => {
     setError(null);
@@ -247,13 +341,48 @@ export default function App() {
       const s = await pi.startPi(cwd);
       setStatus("ready");
       setPid(s.pid);
-      // Ask for current state (model, etc.).
       pi.getState().catch(() => {});
+      pi.getAvailableModels().catch(() => {});
     } catch (e: any) {
       setError(String(e?.message ?? e));
       setStatus("error");
     }
   }, [cwd]);
+
+  const switchModel = useCallback(async (provider: string, modelId: string) => {
+    setModelMenuOpen(false);
+    setModelLabel(`${provider}/${modelId}`);
+    try {
+      await pi.setModel(provider, modelId);
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    }
+  }, []);
+
+  const pickCwd = useCallback(async () => {
+    const dir = await pi.pickDirectory();
+    if (!dir) return;
+    pi.frontendLog("info", `[cwd] picked: ${dir}`);
+    setCwd(dir);
+    // If pi is currently running, restart it with the new cwd.
+    // This drops the in-memory session; disk-persisted sessions are unaffected.
+    if (status === "ready" || status === "busy") {
+      try {
+        await pi.stopPi();
+      } catch (e) {
+        pi.frontendLog("warn", `[cwd] stopPi before restart failed: ${String(e)}`);
+      }
+      // Clear session-bound state but keep the user's choice of cwd.
+      setMessages([]);
+      setModelLabel("(no model)");
+      setThinkingLevel("");
+      setAvailableModels([]);
+      setStatus("disconnected");
+      setPid(null);
+      setNotice(`cwd changed to ${dir} — click Start pi`);
+      setTimeout(() => setNotice(null), 4000);
+    }
+  }, [status]);
 
   const disconnect = useCallback(async () => {
     try {
@@ -266,7 +395,15 @@ export default function App() {
 
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || status !== "ready") return;
+    pi.frontendLog("info", `[send] clicked: status=${status} text.len=${text.length}`);
+    if (!text) {
+      pi.frontendLog("warn", "[send] abort: empty text");
+      return;
+    }
+    if (status !== "ready") {
+      pi.frontendLog("warn", `[send] abort: status is "${status}", not "ready"`);
+      return;
+    }
     const userMsg: Message = {
       id: uid(),
       kind: "user",
@@ -277,8 +414,11 @@ export default function App() {
     setInput("");
     setStatus("busy");
     try {
+      pi.frontendLog("info", "[send] invoking send_prompt");
       await pi.sendPrompt(text);
+      pi.frontendLog("info", "[send] send_prompt resolved");
     } catch (e: any) {
+      pi.frontendLog("error", `[send] send_prompt threw: ${String(e?.message ?? e)}`);
       setError(String(e?.message ?? e));
       setStatus("ready");
     }
@@ -326,10 +466,88 @@ export default function App() {
             {pid ? ` · pid ${pid}` : ""}
             {" · "}
             <code className="path">{cwd}</code>
+            <button
+              className="cwd-button"
+              onClick={pickCwd}
+              title="Change working directory"
+            >
+              📁
+            </button>
           </span>
         </div>
         <div className="titlebar-right">
-          <span className="model-pill">{modelLabel}</span>
+          <div className="dropdown" ref={dropdownRef}>
+            <button
+              className="model-pill-button"
+              onClick={() => setModelMenuOpen((v) => !v)}
+              disabled={status === "disconnected" || status === "error"}
+            >
+              <span className="model-pill-label">{modelLabel}</span>
+              {thinkingLevel && (
+                <span className="thinking-pill-inline">· {thinkingLevel}</span>
+              )}
+              {availableModels.length > 0 && (
+                <span className="model-count-inline">({availableModels.length})</span>
+              )}
+              <span className="caret">▾</span>
+            </button>
+            {modelMenuOpen && (
+              <div className="dropdown-menu">
+                <div className="dropdown-section-label">Model</div>
+                {availableModels.length === 0 ? (
+                  <div className="dropdown-empty">
+                    {status === "ready"
+                      ? "loading…"
+                      : "start pi to load models"}
+                  </div>
+                ) : (
+                  availableModels.map((m) => {
+                    const label = `${m.provider}/${m.id}`;
+                    const isCurrent = modelLabel === label;
+                    return (
+                      <button
+                        key={`${m.provider}/${m.id}`}
+                        className={`dropdown-item ${isCurrent ? "current" : ""}`}
+                        onClick={() => switchModel(m.provider, m.id)}
+                      >
+                        <span className="dropdown-check">{isCurrent ? "✓" : ""}</span>
+                        <span className="dropdown-item-main">
+                          <span className="dropdown-item-name">
+                            {m.name ?? m.id}
+                          </span>
+                          <span className="dropdown-item-id">{label}</span>
+                        </span>
+                        {m.reasoning && (
+                          <span className="dropdown-badge">reasoning</span>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+                <div className="dropdown-divider" />
+                <div className="dropdown-section-label">Thinking</div>
+                <div className="thinking-cycle">
+                  {THINKING_LEVELS.map((lvl) => (
+                    <button
+                      key={lvl}
+                      className={`thinking-chip ${lvl === thinkingLevel ? "current" : ""}`}
+                      onClick={async () => {
+                        try {
+                          await pi.setThinkingLevel(lvl);
+                          setThinkingLevel(lvl);
+                          setModelMenuOpen(false);
+                        } catch (e: any) {
+                          setError(String(e?.message ?? e));
+                        }
+                      }}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           {status === "disconnected" || status === "error" ? (
             <button className="btn primary" onClick={connect} disabled={status === "error"}>
               Start pi

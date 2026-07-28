@@ -83,10 +83,12 @@ fn start_pi(
     app: AppHandle,
     cwd: String,
 ) -> Result<BackendStatus, String> {
+    eprintln!("[pi-desktop] start_pi called: cwd={}", cwd);
     let mut guard = backend.inner.lock().map_err(|e| e.to_string())?;
 
     // If already running, stop it first (idempotent restart on cwd change).
     if let Some(mut child) = guard.child.take() {
+        eprintln!("[pi-desktop] killing previous pi (pid was {})", child.id());
         let _ = child.kill();
         let _ = child.wait();
         guard.stdin = None;
@@ -96,6 +98,7 @@ fn start_pi(
     let pi_path = which_pi().ok_or_else(|| {
         "Could not find `pi` on PATH. Install it with `npm i -g --ignore-scripts @earendil-works/pi-coding-agent` or `curl -fsSL https://pi.dev/install.sh | sh`.".to_string()
     })?;
+    eprintln!("[pi-desktop] using pi at: {}", pi_path);
 
     let mut command = Command::new(&pi_path);
     command
@@ -116,6 +119,7 @@ fn start_pi(
         .map_err(|e| format!("Failed to spawn `pi`: {}", e))?;
 
     let pid = child.id();
+    eprintln!("[pi-desktop] pi spawned ok, pid={}", pid);
     let stdin = child.stdin.take().ok_or("Failed to capture pi stdin")?;
     let stdout = child.stdout.take().ok_or("Failed to capture pi stdout")?;
     let stderr = child.stderr.take().ok_or("Failed to capture pi stderr")?;
@@ -132,22 +136,44 @@ fn start_pi(
     let app_for_reader = app.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
+        eprintln!("[pi-desktop] stdout reader thread started");
+        let mut count: u64 = 0;
         for line in reader.lines().map_while(Result::ok) {
+            count += 1;
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
             }
             match serde_json::from_str::<serde_json::Value>(trimmed) {
                 Ok(value) => {
+                    // Truncate the raw line for readable logs.
+                    let preview: String = trimmed.chars().take(200).collect::<String>()
+                        + if trimmed.chars().count() > 200 { "…" } else { "" };
+                    eprintln!("[pi:line {}] {}", count, preview);
+                    // Extract a short label for the log line, owned so we can
+                    // use it after `value` is moved into emit().
+                    let label: String = value
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "?".to_string());
                     if let Err(e) = app_for_reader.emit("pi:event", value) {
                         eprintln!("[pi emit error] {}", e);
+                    } else {
+                        eprintln!("[pi:emit] type={} (line {})", label, count);
                     }
                 }
                 Err(err) => {
-                    eprintln!("[pi json parse error] {} :: {}", err, trimmed);
+                    let preview: String = trimmed.chars().take(200).collect::<String>()
+                        + if trimmed.chars().count() > 200 { "…" } else { "" };
+                    eprintln!("[pi json parse error] {} :: {}", err, preview);
                 }
             }
         }
+        eprintln!(
+            "[pi-desktop] stdout reader thread exiting after {} lines (stream closed)",
+            count
+        );
         // Stream closed -> tell UI the agent has exited.
         let _ = app_for_reader.emit("pi:event", serde_json::json!({
             "type": "pi_exit",
@@ -178,6 +204,11 @@ fn stop_pi(backend: State<'_, PiBackend>) -> Result<(), String> {
 
 #[tauri::command]
 fn send_prompt(backend: State<'_, PiBackend>, args: PromptArgs) -> Result<(), String> {
+    eprintln!(
+        "[pi-desktop] send_prompt called: message.len={} images={}",
+        args.message.len(),
+        args.images.len()
+    );
     send_rpc_command(backend, serde_json::json!({
         "type": "prompt",
         "message": args.message,
@@ -225,7 +256,18 @@ fn set_model(
 
 #[tauri::command]
 fn get_state(backend: State<'_, PiBackend>) -> Result<(), String> {
-    send_rpc_command(backend, serde_json::json!({ "type": "get_state" }))
+    send_rpc_command(
+        backend,
+        serde_json::json!({ "type": "get_state" }),
+    )
+}
+
+#[tauri::command]
+fn get_available_models(backend: State<'_, PiBackend>) -> Result<(), String> {
+    send_rpc_command(
+        backend,
+        serde_json::json!({ "type": "get_available_models" }),
+    )
 }
 
 #[tauri::command]
@@ -312,12 +354,29 @@ fn which_pi() -> Option<String> {
     None
 }
 
+#[tauri::command]
+fn frontend_log(level: String, message: String) {
+    eprintln!("[frontend:{}] {}", level, message);
+}
+
+#[tauri::command]
+fn show_main_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        Ok(())
+    } else {
+        Err("main window not found".into())
+    }
+}
+
 // ---------- Tauri entry point ----------
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(PiBackend::new())
         .invoke_handler(tauri::generate_handler![
             get_status,
@@ -330,20 +389,59 @@ pub fn run() {
             set_model,
             set_thinking_level,
             get_state,
+            get_available_models,
             new_session,
             respond_extension_ui,
+            frontend_log,
+            show_main_window,
         ])
         .setup(|app| {
             // Best-effort: log HOME for debugging.
             if let Ok(home) = std::env::var("HOME") {
                 eprintln!("[pi-desktop] HOME = {}", home);
             }
+            eprintln!("[pi-desktop] VOLC_ARK_API_KEY present: {}", std::env::var("VOLC_ARK_API_KEY").is_ok());
+            eprintln!("[pi-desktop] PI_PROVIDER = {:?}", std::env::var("PI_PROVIDER").ok());
+            eprintln!("[pi-desktop] tauri setup complete, ensuring main window is shown");
             // Ensure main window is shown.
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
+                let _ = window.set_focus();
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running pi-desktop");
+        .on_window_event(|window, event| {
+            // Diagnostic + UX: when user clicks X, hide the window instead of
+            // exiting. This is the conventional Mac behaviour and prevents
+            // accidental teardown of the pi child process. The user can
+            // bring the window back via the Dock icon.
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    eprintln!(
+                        "[pi-desktop] window CloseRequested for {:?} -> hiding (prevent close)",
+                        window.label()
+                    );
+                    api.prevent_close();
+                    if let Err(e) = window.hide() {
+                        eprintln!("[pi-desktop] hide failed: {}", e);
+                    }
+                }
+                tauri::WindowEvent::Destroyed => {
+                    eprintln!("[pi-desktop] window Destroyed for {:?}", window.label());
+                }
+                _ => {}
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building pi-desktop")
+        .run(|app_handle, event| {
+            // macOS: when the user clicks the Dock icon, unhide the main window.
+            if let tauri::RunEvent::Reopen { has_visible_windows, .. } = event {
+                eprintln!("[pi-desktop] RunEvent::Reopen has_visible_windows={}", has_visible_windows);
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        });
 }
