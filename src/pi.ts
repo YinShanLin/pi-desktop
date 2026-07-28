@@ -7,6 +7,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 export interface BackendStatus {
   running: boolean;
@@ -50,12 +51,32 @@ export const setThinkingLevel = (level: string) =>
 
 export const getState = () => invoke<unknown>("get_state");
 
+export const getAvailableModels = () => invoke<unknown>("get_available_models");
+
 export const newSession = () => invoke<void>("new_session");
 
 export const respondExtensionUi = (
   id: string,
   response: Record<string, unknown>,
 ) => invoke<void>("respond_extension_ui", { id, response });
+
+export const frontendLog = (level: string, message: string) =>
+  invoke<void>("frontend_log", { level, message });
+
+export const showMainWindow = () => invoke<void>("show_main_window");
+
+/**
+ * Open the macOS native folder picker. Returns the chosen path, or null
+ * if the user cancelled. Backed by `tauri-plugin-dialog`.
+ */
+export async function pickDirectory(): Promise<string | null> {
+  const result = await openDialog({
+    directory: true,
+    multiple: false,
+    title: "Select working directory",
+  });
+  return typeof result === "string" ? result : null;
+}
 
 // ---- Events ----
 

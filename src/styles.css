@@ -106,6 +106,229 @@ body {
   padding: 3px 8px;
   border-radius: 999px;
   font-family: var(--font-mono);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.thinking-pill {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.model-count {
+  color: var(--text-faint);
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+/* CWD picker button — sits next to the path in the titlebar. */
+.cwd-button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+  padding: 0 6px;
+  margin-left: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.cwd-button:hover {
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* Model dropdown trigger. Visually replaces the old flat .model-pill. */
+.dropdown {
+  position: relative;
+}
+
+.model-pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 3px 10px 3px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  max-width: 420px;
+}
+
+.model-pill-button:hover:not(:disabled) {
+  background: #48484a;
+  border-color: #5a5a5c;
+}
+
+.model-pill-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.model-pill-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thinking-pill-inline {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.model-count-inline {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.caret {
+  color: var(--text-faint);
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+/* Dropdown menu */
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 320px;
+  max-width: 440px;
+  max-height: 480px;
+  overflow-y: auto;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dropdown-section-label {
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 6px 8px 4px;
+}
+
+.dropdown-empty {
+  padding: 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-elev-2);
+}
+
+.dropdown-item.current {
+  background: rgba(10, 132, 255, 0.12);
+}
+
+.dropdown-check {
+  width: 14px;
+  color: var(--accent);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.dropdown-item-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.dropdown-item-name {
+  color: var(--text);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-item-id {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-badge {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(10, 132, 255, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* Thinking-level chips inside the model dropdown. */
+.thinking-cycle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 6px 6px;
+}
+
+.thinking-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+}
+
+.thinking-chip:hover {
+  background: #48484a;
+  color: var(--text);
+}
+
+.thinking-chip.current {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
 }
 
 /* ---------- Banners ---------- */
