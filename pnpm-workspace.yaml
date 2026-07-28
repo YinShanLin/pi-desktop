@@ -1,0 +1,5 @@
+# pnpm 11+ configuration.
+# `allowBuilds` replaces the legacy `onlyBuiltDependencies` / `ignoredBuiltDependencies`.
+# Each key is a package matcher, the value is true (allow) or false (deny).
+allowBuilds:
+  esbuild: true
