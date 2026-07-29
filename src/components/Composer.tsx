@@ -15,6 +15,7 @@ type Props = {
   onSetThinking: (level: string) => void;
   cwd: string;
   onPickCwd: () => void;
+  onRetry: () => void;
 };
 
 const THINKING_LEVELS = [
@@ -46,6 +47,7 @@ export function Composer({
   onSetThinking,
   cwd,
   onPickCwd,
+  onRetry,
 }: Props) {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
@@ -191,7 +193,7 @@ export function Composer({
               ? "Ask pi anything."
               : busy
                 ? "Working…"
-                : "Click Start to begin."
+                : ""
           }
           disabled={status === "disconnected" || status === "error"}
           rows={2}
@@ -199,7 +201,15 @@ export function Composer({
         <div className="composer-foot">
           <span className="composer-foot-left">0 files attached</span>
           <span className="composer-foot-right">
-            {busy ? (
+            {status === "disconnected" || status === "error" ? (
+              <button
+                className="composer-send"
+                onClick={onRetry}
+                title="Start pi"
+              >
+                <span>Start pi</span>
+              </button>
+            ) : busy ? (
               <button
                 className="composer-stop-hint"
                 onClick={onAbort}
