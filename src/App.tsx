@@ -438,6 +438,10 @@ export default function App() {
     try { await pi.setModel(provider, modelId); } catch (e: any) { setError(String(e?.message ?? e)); }
   }, []);
 
+  const retryPi = useCallback(() => {
+    restartPi(cwdRef.current);
+  }, [restartPi]);
+
   const setThinking = useCallback(async (level: string) => {
     try {
       await pi.setThinkingLevel(level);
@@ -546,6 +550,7 @@ export default function App() {
             onSetThinking={setThinking}
             cwd={cwd}
             onPickCwd={pickCwd}
+            onRetry={retryPi}
           />
         </div>
 
