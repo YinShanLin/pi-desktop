@@ -1,10 +1,10 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
-  ChevronDown,
   Minus,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Search,
   Settings,
   X,
 } from "lucide-react";
@@ -13,14 +13,11 @@ import type { ConnectionStatus } from "../types";
 
 type Props = {
   status: ConnectionStatus;
-  /** Currently active session; shown as the centered title. */
-  sessionTitle: string;
   /** Sidebar lock state. */
   sidebarLocked: boolean;
   onToggleSidebar: () => void;
   onOpenPalette: () => void;
   onOpenSettings: () => void;
-  onNewChat: () => void;
 };
 
 function statusColor(s: ConnectionStatus): string {
@@ -38,12 +35,10 @@ function statusColor(s: ConnectionStatus): string {
 
 export function Titlebar({
   status,
-  sessionTitle,
   sidebarLocked,
   onToggleSidebar,
   onOpenPalette,
   onOpenSettings,
-  onNewChat,
 }: Props) {
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -77,7 +72,7 @@ export function Titlebar({
         <button
           className="titlebar-icon-btn"
           onClick={onToggleSidebar}
-          title={`${sidebarLocked ? "Collapse" : "Expand"} sidebar (⌘\\)`}
+          title={`${sidebarLocked ? "Collapse" : "Expand"} sidebar`}
           aria-label="Toggle sidebar"
         >
           {sidebarLocked ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
@@ -92,25 +87,13 @@ export function Titlebar({
         </div>
       </div>
 
-      <button
-        className="titlebar-center"
-        onClick={onOpenPalette}
-        title="Switch session (⌘K)"
-      >
-        <span className="titlebar-session-label">Session</span>
-        <span className="titlebar-divider">·</span>
-        <span className="titlebar-session-title">{sessionTitle || "Untitled"}</span>
-        <ChevronDown size={12} className="titlebar-chevron" />
-      </button>
+      <div className="titlebar-center" />
 
       <div className="titlebar-right">
-        <button className="titlebar-icon-btn" onClick={onNewChat} title="New chat (⌘N)" aria-label="New chat">
-          <Plus size={15} />
+        <button className="titlebar-icon-btn" onClick={onOpenPalette} title="Command palette" aria-label="Command palette">
+          <Search size={14} />
         </button>
-        <button className="titlebar-icon-btn" onClick={onOpenPalette} title="Command palette (⌘K)" aria-label="Command palette">
-          <kbd className="titlebar-kbd">⌘K</kbd>
-        </button>
-        <button className="titlebar-icon-btn" onClick={onOpenSettings} title="Settings (⌘,)" aria-label="Settings">
+        <button className="titlebar-icon-btn" onClick={onOpenSettings} title="Settings" aria-label="Settings">
           <Settings size={15} />
         </button>
       </div>

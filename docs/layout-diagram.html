@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1100">
+<title>Pi Desktop 布局示意图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #111;
+    padding: 24px;
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    color: #fff;
+  }
+  h1 { font-size: 14px; color: #888; margin-bottom: 16px; letter-spacing: 0.04em; text-transform: uppercase; }
+  h1 small { color: #666; text-transform: none; }
+
+  .window {
+    width: 1100px;
+    height: 700px;
+    background: #1a1a1f;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.13);
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 48px 1fr 22px;
+  }
+
+  /* ===== TOPBAR ===== */
+  .topbar {
+    display: flex;
+    align-items: center;
+    height: 48px;
+    padding: 0 12px 0 8px;
+    background: #1a1a1f;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    gap: 12px;
+  }
+  .tb-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .tb-spacer { flex: 1; }
+  .tb-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .traffic {
+    display: flex;
+    gap: 7px;
+    padding-right: 6px;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; }
+  .dot.y { background: #febc2e; }
+  .dot.g { background: #28c840; }
+
+  .icon-btn {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    background: transparent; border: 0; border-radius: 4px;
+    color: #b8b8c0; cursor: pointer;
+    font-size: 11px; font-family: monospace;
+  }
+  .icon-btn:hover { background: #232329; color: #f5f5f7; }
+
+  .brand {
+    display: flex; align-items: center; gap: 6px;
+    padding-left: 2px;
+  }
+  .logo { font-family: monospace; font-size: 17px; font-style: italic; color: #f5f5f7; }
+  .dot-status { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 2.5px #1a1a1f, 0 0 0 3.5px #232329; }
+
+  /* ===== BODY ===== */
+  .body {
+    display: flex;
+    min-height: 0;
+  }
+  .sidebar {
+    flex: 0 0 48px;
+    width: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 4px;
+    background: #1a1a1f;
+    border-right: 1px solid rgba(255,255,255,0.05);
+  }
+  .main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: #1a1a1f;
+    position: relative;
+  }
+
+  /* ===== CHAT ===== */
+  .chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 24px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .msg-area {
+    background: #232329;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 10px;
+    padding: 14px 16px;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .msg-label { font-size: 12px; color: #7e7e88; font-family: monospace; margin-bottom: 4px; }
+  .msg-text { font-size: 14px; color: #b8b8c0; line-height: 1.5; }
+
+  .msg-user-sample {
+    background: #232329;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 6px;
+    padding: 10px 14px;
+    max-width: 80%;
+    margin-left: auto;
+    font-size: 14px;
+    color: #f5f5f7;
+  }
+
+  /* ===== COMPOSER ===== */
+  .composer-zone {
+    border-top: 1px solid rgba(255,255,255,0.05);
+    background: #1a1a1f;
+    padding: 14px 24px 16px;
+  }
+  .composer-box {
+    max-width: 900px;
+    margin: 0 auto;
+    background: #232329;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 10px;
+    padding: 10px 12px 8px;
+  }
+  .comp-caption {
+    display: flex; justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 12px; color: #7e7e88; font-family: monospace;
+  }
+  .comp-input {
+    width: 100%;
+    min-height: 80px;
+    background: transparent;
+    border: 0;
+    color: #f5f5f7;
+    font: 14.5px/1.55 inherit;
+    outline: none;
+    resize: none;
+  }
+  .comp-foot {
+    display: flex; justify-content: space-between;
+    padding-top: 4px;
+    font-size: 11px; color: #54545c; font-family: monospace;
+  }
+
+  /* ===== FOOTER ===== */
+  .statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 22px;
+    padding: 0 12px;
+    background: #232329;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    font-family: monospace; font-size: 11px; color: #7e7e88;
+  }
+
+  /* ===== 标注 ===== */
+  .notes {
+    margin-top: 40px;
+    max-width: 1100px;
+    padding: 20px 24px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #b8b8c0;
+  }
+  .notes h2 { font-size: 12px; color: #f5f5f7; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 10px; }
+  .notes .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; }
+  .notes .grid dt { color: #7e7e88; font-family: monospace; font-size: 11px; }
+  .notes .grid dd { color: #f5f5f7; margin-bottom: 2px; }
+  .notes .hl { background: rgba(107,143,247,0.15); padding: 0 4px; border-radius: 3px; color: #6b8ff7; }
+  .notes .err { background: rgba(248,113,113,0.12); padding: 0 4px; border-radius: 3px; color: #f87171; }
+</style>
+</head>
+<body>
+
+<h1>Pi Desktop — 布局结构示意图 <small>1100×700 / minWidth: 150</small></h1>
+
+<div class="window">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="tb-left">
+      <div class="traffic">
+        <span class="dot r"></span>
+        <span class="dot y"></span>
+        <span class="dot g"></span>
+      </div>
+      <button class="icon-btn">☰</button>
+      <div class="brand">
+        <span class="logo">π</span>
+        <span class="dot-status"></span>
+      </div>
+    </div>
+    <div class="tb-spacer"></div>
+    <div class="tb-right">
+      <button class="icon-btn">⌕</button>
+      <button class="icon-btn">⚙</button>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+    <div class="sidebar">
+      <span style="font-family:monospace;font-style:italic;font-size:16px;color:#b8b8c0;margin-bottom:6px">π</span>
+      <span style="font-size:11px;color:#54545c;writing-mode:vertical-rl;margin-top:auto;opacity:0.5">侧栏 48px</span>
+    </div>
+
+    <div class="main">
+      <div class="chat">
+        <div style="text-align:center;padding:40px 0;color:#54545c;font-size:13px">
+          ═══ 消息列表区域 ═══<br>
+          <span style="font-size:11px">padding: 32px 24px 0</span>
+        </div>
+
+        <div class="msg-area">
+          <div class="msg-label">助手消息示例 (max-width: 900px, 居中)</div>
+          <div class="msg-text">
+            Will batch <code style="color:#6b8ff7">text_delta</code> into a per-frame buffer using <code style="color:#6b8ff7">requestAnimationFrame</code>. Render frequency caps at display refresh.
+          </div>
+        </div>
+
+        <div class="msg-user-sample">
+          <div style="font-size:10px;color:#54545c;font-family:monospace;margin-bottom:2px">用户消息 (max-width: 80%, 右对齐)</div>
+          refactor the streaming handler to coalesce deltas per frame
+        </div>
+
+        <div style="padding:10px 0">
+          <div style="border:1px dashed rgba(255,255,255,0.08);border-radius:6px;padding:8px 12px;display:flex;gap:10px">
+            <span style="width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;margin-top:3px"></span>
+            <span style="color:#6b8ff7;font-family:monospace;font-size:12px">read</span>
+            <span style="color:#7e7e88;font-family:monospace;font-size:12px">~/src/App.tsx</span>
+            <span style="color:#54545c;font-family:monospace;font-size:10.5px;margin-left:auto">142ms</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-zone">
+        <div class="composer-box">
+          <div class="comp-caption">
+            <span>📁 pi-desktop</span>
+            <span>minimax/M3 · medium ▾</span>
+          </div>
+          <div class="comp-input" style="color:#54545c">Ask pi anything.</div>
+          <div class="comp-foot">
+            <span>0 files attached</span>
+            <span style="display:inline-flex;align-items:center;gap:6px;background:#6b8ff7;color:#fff;border:0;padding:6px 12px;border-radius:6px;font:12px sans-serif;font-weight:500">
+              Send <span style="display:inline-grid;place-items:center;width:14px;height:14px;background:rgba(255,255,255,0.18);border-radius:4px;font-size:10px">↵</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span>ready · ~/AI/pi-desktop · deepseek/deepseek-v4-flash</span>
+    <span>1.2k tokens</span>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>当前布局配置</h2>
+  <dl class="grid">
+    <dt>窗口默认大小</dt><dd>1100 × 750</dd>
+    <dt>窗口最小宽度</dt><dd><span class="err">150px</span>（可以缩到极小）</dd>
+    <dt>Topbar 高度</dt><dd>48px</dd>
+    <dt>Sidebar 宽度</dt><dd>48px（折叠态）</dd>
+    <dt>Composer 最大宽度</dt><dd><span class="hl">900px</span>（居中）</dd>
+    <dt>消息助手气泡</dt><dd>无 max-width 限制（跟随父容器）</dd>
+    <dt>消息用户气泡</dt><dd>无 max-width 限制（但悬浮右对齐）</dd>
+    <dt>消息列表 padding</dt><dd>上 32px / 左右 24px / 下 12px</dd>
+    <dt>Composer zone padding</dt><dd>上 14px / 左右 24px / 下 16px</dd>
+  </dl>
+
+  <h2 style="margin-top:16px">⚠️ 可能存在的问题（请告诉我）</h2>
+  <ol style="padding-left:18px;color:#7e7e88">
+    <li><strong>设置按钮在右上角</strong>（topbar-right 最右侧），你看不见 → 可能是窗口实际宽度没到 1100px？</li>
+    <li><strong>Composer 宽 900px 居中</strong>，在 1100px 窗口下左右各有 ~52px 间距，你觉得偏大还是偏小？</li>
+    <li>消息列表的 <strong>padding: 0 24px</strong> 给两边留了呼吸空间，窗口缩窄时跟随收缩</li>
+    <li><strong>底部状态栏</strong> 22px 高度，在 error/notice 时才显示</li>
+  </ol>
+</div>
+
+</body>
+</html>

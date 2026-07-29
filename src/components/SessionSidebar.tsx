@@ -1,12 +1,9 @@
 import {
-  Activity, ChevronDown, ChevronRight, Clipboard, Cpu, File,
+  Activity, ChevronDown, ChevronRight, Clipboard, Cpu,
   FolderTree, Plus, Search, Terminal, Trash2, X, PanelRightClose,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { relativeTime, type Session } from "../data/sessions";
-import { SidebarFileTree } from "./SidebarFileTree";
-
-type SidebarView = "sessions" | "files";
 
 type Props = {
   sessions: Session[];
@@ -18,18 +15,13 @@ type Props = {
   onArchive: (id: string) => void;
   onDelete: (id: string) => void;
   onOpenPalette: () => void;
-  onToggleFiles: () => void;
-  onToggleTerminal: () => void;
   onToggleRail: () => void;
-  cwd: string;
-  isMac: boolean;
 };
 
 type QuickAction = {
   id: string;
   label: string;
   icon: React.ReactNode;
-  shortcut: string;
   action: () => void;
 };
 
@@ -55,13 +47,8 @@ export function SessionSidebar({
   onArchive,
   onDelete,
   onOpenPalette,
-  onToggleFiles,
-  onToggleTerminal,
   onToggleRail,
-  cwd,
-  isMac,
 }: Props) {
-  const [view, setView] = useState<SidebarView>("sessions");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const searchRef = useRef<HTMLDivElement | null>(null);
@@ -107,10 +94,8 @@ export function SessionSidebar({
   const showQuickActions = focused && !query.trim();
 
   const quickActions: QuickAction[] = [
-    { id: "new-chat", label: "New chat", icon: <Plus size={13} />, shortcut: "⌘N", action: onNewChat },
-    { id: "toggle-files", label: "Toggle Files tab", icon: <File size={13} />, shortcut: "⌘B", action: onToggleFiles },
-    { id: "toggle-terminal", label: "Toggle Terminal tab", icon: <Terminal size={13} />, shortcut: "⌘J", action: onToggleTerminal },
-    { id: "toggle-rail", label: "Toggle Right Rail", icon: <PanelRightClose size={13} />, shortcut: "⌘.", action: onToggleRail },
+    { id: "new-chat", label: "New chat", icon: <Plus size={13} />, action: onNewChat },
+    { id: "toggle-rail", label: "Toggle Right Rail", icon: <PanelRightClose size={13} />, action: onToggleRail },
   ];
 
   const filtered = query.trim()
@@ -124,84 +109,55 @@ export function SessionSidebar({
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-view-toggle">
-        <button className={`view-toggle-btn ${view === "sessions" ? "active" : ""}`} onClick={() => setView("sessions")}>Sessions</button>
-        <button className={`view-toggle-btn ${view === "files" ? "active" : ""}`} onClick={() => setView("files")}>Files</button>
+      <div className="sidebar-top">
+        <button className="new-chat-button" onClick={onNewChat} title="New chat">
+          <Plus size={14} />
+          <span>New chat</span>
+        </button>
+        <div className="sidebar-search" ref={searchRef}>
+          <Search size={13} className="sidebar-search-icon" />
+          <input
+            type="text"
+            placeholder={showQuickActions ? "" : "Search sessions…"}
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            onFocus={() => setFocused(true)}
+          />
+          {showQuickActions && (
+            <div className="quick-actions">
+              {quickActions.map((qa) => (
+                <button key={qa.id} className="quick-action-item" onClick={() => { qa.action(); setFocused(false); }}>
+                  {qa.icon}
+                  <span className="quick-action-label">{qa.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {view === "sessions" ? (
-        <>
-          <div className="sidebar-top">
-            <button className="new-chat-button" onClick={onNewChat} title="New chat (⌘N)">
-              <Plus size={14} />
-              <span>New chat</span>
-            </button>
-            <div className="sidebar-search" ref={searchRef}>
-              <Search size={13} className="sidebar-search-icon" />
-              <input
-                type="text"
-                placeholder={showQuickActions ? "" : "Search sessions…"}
-                value={query}
-                onChange={(e) => onQueryChange(e.target.value)}
-                onFocus={() => setFocused(true)}
-              />
-              {!showQuickActions && <kbd className="sidebar-kbd">{isMac ? "⌘K" : "Ctrl+K"}</kbd>}
-              {showQuickActions && (
-                <div className="quick-actions">
-                  {quickActions.map((qa) => (
-                    <button key={qa.id} className="quick-action-item" onClick={() => { qa.action(); setFocused(false); }}>
-                      {qa.icon}
-                      <span className="quick-action-label">{qa.label}</span>
-                      <kbd className="quick-action-kbd">{qa.shortcut}</kbd>
-                    </button>
-                  ))}
+      <div className="sidebar-scroll">
+        {filtered.length === 0 ? (
+          <div className="sidebar-empty">{query.trim() ? `No sessions match "${query}"` : "No sessions yet"}</div>
+        ) : (
+          groups.map((g) => {
+            const items = byGroup(g);
+            if (items.length === 0) return null;
+            const isCollapsed = collapsed.has(g);
+            return (
+              <div key={g} className="sidebar-group">
+                <div className="sidebar-group-label" onClick={() => toggleCollapse(g)} role="button" tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter") toggleCollapse(g); }}
+                >
+                  <span className="sidebar-group-label-left">
+                    <span className="sidebar-group-caret">
+                      {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+                    </span>
+                    {GROUP_LABELS[g]}
+                  </span>
+                  <span className="sidebar-group-count">{items.length}</span>
                 </div>
-              )}
-            </div>
-          </div>
-
-          <div className="sidebar-scroll">
-            {filtered.length === 0 ? (
-              <div className="sidebar-empty">{query.trim() ? `No sessions match "${query}"` : "No sessions yet"}</div>
-            ) : (
-              groups.map((g) => {
-                const items = byGroup(g);
-                if (items.length === 0) return null;
-                const isCollapsed = collapsed.has(g);
-                return (
-                  <div key={g} className="sidebar-group">
-                    <div className="sidebar-group-label" onClick={() => toggleCollapse(g)} role="button" tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === "Enter") toggleCollapse(g); }}
-                    >
-                      <span className="sidebar-group-label-left">
-                        <span className="sidebar-group-caret">
-                          {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
-                        </span>
-                        {GROUP_LABELS[g]}
-                      </span>
-                      <span className="sidebar-group-count">{items.length}</span>
-                    </div>
-                    {!isCollapsed && items.map((s) => (
-                      <SessionRow
-                        key={s.id} session={s} isActive={activeId === s.id}
-                        onSelect={() => onSelect(s.id)}
-                        onArchive={() => onArchive(s.id)}
-                        onDelete={() => onDelete(s.id)}
-                        onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, session: s }); }}
-                      />
-                    ))}
-                  </div>
-                );
-              })
-            )}
-
-            {archived.length > 0 && query.trim() === "" && !showQuickActions && (
-              <div className="sidebar-group">
-                <div className="sidebar-group-label">
-                  <span className="sidebar-group-label-left">Archive</span>
-                  <span className="sidebar-group-count">{archived.length}</span>
-                </div>
-                {archived.slice(0, 3).map((s) => (
+                {!isCollapsed && items.map((s) => (
                   <SessionRow
                     key={s.id} session={s} isActive={activeId === s.id}
                     onSelect={() => onSelect(s.id)}
@@ -211,27 +167,40 @@ export function SessionSidebar({
                   />
                 ))}
               </div>
-            )}
-          </div>
+            );
+          })
+        )}
 
-          <div className="sidebar-footer">
-            <button className="sidebar-palette-button" onClick={onOpenPalette} title="Command palette (⌘K)">
-              <span className="palette-dot" />
-              <span className="palette-hint">Type a command…</span>
-              <kbd>{isMac ? "⌘K" : "Ctrl+K"}</kbd>
-            </button>
+        {archived.length > 0 && query.trim() === "" && !showQuickActions && (
+          <div className="sidebar-group">
+            <div className="sidebar-group-label">
+              <span className="sidebar-group-label-left">Archive</span>
+              <span className="sidebar-group-count">{archived.length}</span>
+            </div>
+            {archived.slice(0, 3).map((s) => (
+              <SessionRow
+                key={s.id} session={s} isActive={activeId === s.id}
+                onSelect={() => onSelect(s.id)}
+                onArchive={() => onArchive(s.id)}
+                onDelete={() => onDelete(s.id)}
+                onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, session: s }); }}
+              />
+            ))}
           </div>
+        )}
+      </div>
 
-          <div className="sidebar-summary" aria-hidden>
-            <SummaryCell icon={<Activity size={11} />} label="active" value={String(active.length)} />
-            <SummaryCell icon={<Cpu size={11} />} label="tokens" value="1.2k" />
-          </div>
-        </>
-      ) : (
-        <div className="sidebar-files">
-          <SidebarFileTree root={cwd} />
-        </div>
-      )}
+      <div className="sidebar-footer">
+        <button className="sidebar-palette-button" onClick={onOpenPalette} title="Command palette">
+          <span className="palette-dot" />
+          <span className="palette-hint">Type a command…</span>
+        </button>
+      </div>
+
+      <div className="sidebar-summary" aria-hidden>
+        <SummaryCell icon={<Activity size={11} />} label="active" value={String(active.length)} />
+        <SummaryCell icon={<Cpu size={11} />} label="tokens" value="1.2k" />
+      </div>
 
       {contextMenu && (
         <div ref={ctxRef} className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>

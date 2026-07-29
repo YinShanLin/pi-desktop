@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "../data/sessions";
-import { SHORTCUTS, isMac, formatCombo } from "../lib/shortcuts";
+import { SHORTCUTS, formatCombo } from "../lib/shortcuts";
 
 type Item = {
   id: string;
@@ -161,7 +161,6 @@ export function CommandPalette({
                     >
                       <span className="palette-item-label">{it.label}</span>
                       {it.hint && <span className="palette-item-hint">{it.hint}</span>}
-                      {it.shortcut && <kbd className="palette-item-kbd">{it.shortcut}</kbd>}
                     </button>
                   );
                 })}
@@ -170,10 +169,6 @@ export function CommandPalette({
           )}
         </div>
         <div className="palette-footer">
-          <span><kbd className="palette-key">↑↓</kbd>navigate</span>
-          <span><kbd className="palette-key">⏎</kbd>select</span>
-          <span><kbd className="palette-key">esc</kbd>close</span>
-          <span style={{ marginLeft: "auto" }}>{isMac ? "⌘K" : "Ctrl+K"}</span>
         </div>
       </div>
     </div>

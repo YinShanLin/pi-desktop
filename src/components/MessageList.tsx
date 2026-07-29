@@ -37,20 +37,6 @@ export const MessageList = memo(function MessageList({ messages }: Props) {
             search the web, or edit code. Click <strong>Start</strong> in the
             top-right to begin.
           </p>
-          <div className="empty-shortcuts">
-            <div className="empty-shortcut">
-              <kbd>⌘N</kbd> <span>new chat</span>
-            </div>
-            <div className="empty-shortcut">
-              <kbd>⌘B</kbd> <span>files panel</span>
-            </div>
-            <div className="empty-shortcut">
-              <kbd>⌘J</kbd> <span>terminal</span>
-            </div>
-            <div className="empty-shortcut">
-              <kbd>⌘K</kbd> <span>command palette</span>
-            </div>
-          </div>
         </div>
       </div>
     );

@@ -1,13 +1,22 @@
 import { Moon, Sun, X } from "lucide-react";
 import { useEffect, useRef } from "react";
+import type { FontChoice } from "../hooks/useFont";
 
 type Props = {
   theme: "dark" | "light";
   onToggleTheme: () => void;
+  font: FontChoice;
+  onSetFont: (f: FontChoice) => void;
   onClose: () => void;
 };
 
-export function Settings({ theme, onToggleTheme, onClose }: Props) {
+const FONT_OPTIONS: Array<{ id: FontChoice; label: string; sample: string }> = [
+  { id: "system", label: "System", sample: "Aa" },
+  { id: "rounded", label: "Rounded", sample: "Aa" },
+  { id: "serif", label: "Serif", sample: "Aa" },
+];
+
+export function Settings({ theme, onToggleTheme, font, onSetFont, onClose }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -47,6 +56,25 @@ export function Settings({ theme, onToggleTheme, onClose }: Props) {
                 <div className="settings-toggle-thumb" />
               </div>
             </button>
+          </div>
+
+          <div className="settings-section">
+            <div className="settings-section-label">Font</div>
+            <div className="font-picker" role="radiogroup" aria-label="Font family">
+              {FONT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  className={`font-pick ${font === opt.id ? "active" : ""}`}
+                  onClick={() => onSetFont(opt.id)}
+                  role="radio"
+                  aria-checked={font === opt.id}
+                  title={opt.label}
+                >
+                  <span className={`font-pick-sample font-sample-${opt.id}`}>{opt.sample}</span>
+                  <span className="font-pick-label">{opt.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

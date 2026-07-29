@@ -1,4 +1,5 @@
-import { memo, useState } from "react";
+import { marked } from "marked";
+import { memo, useMemo, useState } from "react";
 import type { Message, ToolMessage } from "../types";
 
 function prettyArgs(args: Record<string, unknown>): string {
@@ -40,17 +41,41 @@ export const MessageRow = memo(function MessageRow({ message }: { message: Messa
     );
   }
   if (message.kind === "assistant") {
+    const html = useMemo(() => {
+      if (!message.text) return "";
+      try {
+        return marked.parse(message.text, { async: false }) as string;
+      } catch {
+        return message.text;
+      }
+    }, [message.text]);
+
     return (
       <div className="row assistant">
         <div className="bubble assistant-bubble">
+          <div className="msg-meta">
+            <span className="role">pi</span>
+            <span>·</span>
+            <span>{message.isStreaming ? "streaming…" : "done"}</span>
+            {message.thinking && (
+              <>
+                <span>·</span>
+                <span style={{ color: "var(--accent)" }}>thinking ▸</span>
+              </>
+            )}
+          </div>
           {message.thinking && (
             <details className="thinking" open={false}>
               <summary>thinking</summary>
               <pre>{message.thinking}</pre>
             </details>
           )}
-          <div className="text">
-            {message.text || (message.isStreaming ? "…" : "")}
+          <div className="text markdown-body">
+            {html ? (
+              <div dangerouslySetInnerHTML={{ __html: html }} />
+            ) : (
+              message.isStreaming ? "…" : ""
+            )}
             {message.isStreaming && <span className="cursor" />}
           </div>
         </div>
@@ -65,15 +90,17 @@ function ToolRow({ tool }: { tool: ToolMessage }) {
   const [showDetails, setShowDetails] = useState(false);
   const argStr = prettyArgs(tool.args);
   const resultStr = tool.result !== undefined ? extractText(tool.result) : null;
+  const isRunning = tool.result === undefined;
 
   return (
     <div className={`row tool ${tool.isError ? "err" : ""}`}>
       <div className="bubble tool-bubble">
         <button className="tool-header" onClick={() => setOpen((v) => !v)}>
+          <span className={`tool-pulse ${isRunning ? "pending" : ""}`} />
           <span className="tool-name">{tool.name}</span>
           <span className="tool-arg">{argStr.slice(0, 140)}</span>
-          <span className="tool-state">
-            {tool.result === undefined
+          <span className="tool-time">
+            {isRunning
               ? "running…"
               : tool.isError
                 ? "error"
