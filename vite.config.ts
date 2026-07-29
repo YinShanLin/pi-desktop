@@ -29,4 +29,18 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  build: {
+    target: "esnext",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom"],
+        },
+      },
+    },
+  },
+  esbuild: {
+    drop: process.env.TAURI_ENV_DEBUG ? undefined : ["console", "debugger"],
+  },
 }));

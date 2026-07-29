@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1100" />
+<title>Pi Desktop — Style F · WorkBuddy-inspired</title>
+<style>
+  /* WorkBuddy-inspired tokens.
+     灵感来源：WorkBuddy 主界面 ——
+     · 暗色不是 pure-black，而是带蓝紫调的灰
+     · 主底色与次底色有 ~3% 亮度差，靠这一差做层级
+     · 字体 SF Pro / system-ui，字重区分不用字号
+     · 左侧边栏靠 background 一档做下沉
+     · 主区不画框，只靠 padding 撑空间
+     · hover 用 accent-soft 染色，而非纯灰
+     · 圆角窄，最多 6px
+  */
+
+  :root {
+    --bg:        #1a1a1f;       /* main canvas */
+    --bg-1:      #232329;       /* sidebar / cards */
+    --bg-2:      #2c2c33;       /* hover / input bg */
+    --bg-3:      #35353c;       /* active session row */
+
+    --fg:        #f5f5f7;
+    --fg-2:      #b8b8c0;
+    --fg-3:      #7e7e88;
+    --fg-4:      #54545c;
+
+    --border:        rgba(255,255,255,0.05);
+    --border-2:      rgba(255,255,255,0.09);
+    --border-strong: rgba(255,255,255,0.13);
+
+    --accent:        #6b8ff7;
+    --accent-2:      #5577e0;
+    --accent-soft:   rgba(107,143,247,0.13);
+    --accent-glow:   rgba(107,143,247,0.08);
+
+    --ok:    #4ade80;
+    --warn:  #fbbf24;
+    --err:   #f87171;
+
+    --font-ui:   -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+    --fs-xs:  11.5px;
+    --fs-sm:  12.5px;
+    --fs-md:  14px;
+    --fs-lg:  15.5px;
+    --fs-xl:  18px;
+
+    --h-top:    48px;
+    --w-rail:   48px;
+    --w-side:   260px;
+    --w-side-l: 48px;
+    --w-rr:     300px;
+    --chat-max: 760px;
+
+    --ease:  cubic-bezier(0.32, 0.72, 0, 1);
+    --t-fast: 110ms;
+    --t-med:  200ms;
+    --t-slow: 320ms;
+
+    --r-1: 4px;
+    --r-2: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0f0f12;
+    font-family: var(--font-ui);
+    color: var(--fg);
+    padding: 40px 28px 60px;
+    -webkit-font-smoothing: antialiased;
+    font-size: var(--fs-md);
+    line-height: 1.5;
+  }
+
+  h1 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fg-3);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  h1 small { color: var(--fg-4); font-weight: 500; letter-spacing: 0.04em; text-transform: none; margin-left: 6px; }
+
+  .label {
+    font-size: 11px;
+    color: var(--fg-3);
+    text-align: center;
+    margin-top: 14px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+
+  .stack { display: flex; flex-direction: column; gap: 4px; }
+  .row { display: flex; gap: 28px; flex-wrap: nowrap; justify-content: center; align-items: flex-start; }
+  .row + .row { margin-top: 36px; }
+
+  /* ============================================================
+     WINDOW
+     ============================================================ */
+  .window {
+    width: 1100px;
+    height: 760px;
+    background: var(--bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-strong);
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: var(--h-top) 1fr;
+  }
+
+  /* ============================================================
+     TOPBAR
+     ============================================================ */
+  .topbar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    height: var(--h-top);
+    padding: 0 14px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    gap: 14px;
+    user-select: none;
+  }
+  .tb-left, .tb-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tb-mid {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .window-controls {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-right: 6px;
+  }
+  .wc {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0.85;
+  }
+  .wc.close { background: #ff5f57; }
+  .wc.min   { background: #febc2e; }
+  .wc.max   { background: #28c840; }
+
+  .btn-icon {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--r-1);
+    color: var(--fg-2);
+    cursor: pointer;
+    font: inherit;
+  }
+  .btn-icon:hover { background: var(--bg-1); color: var(--fg); }
+  .btn-icon.active { background: var(--bg-1); color: var(--accent); }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 2px;
+  }
+  .brand-logo {
+    font-family: var(--font-mono);
+    font-size: 17px;
+    color: var(--fg);
+    font-style: italic;
+    font-weight: 500;
+  }
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 0 2.5px var(--bg), 0 0 0 3.5px var(--bg-1);
+  }
+
+  .session-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 14px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--fg);
+    cursor: pointer;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+  }
+  .session-pill:hover { background: var(--bg-2); border-color: var(--border-2); }
+  .session-pill .glyph { color: var(--fg-3); font-family: var(--font-mono); font-size: var(--fs-xs); letter-spacing: 0.04em; text-transform: uppercase; }
+  .session-pill .sep { color: var(--fg-4); }
+  .session-pill .title { color: var(--fg); }
+  .session-pill .caret { color: var(--fg-3); font-size: 9px; }
+
+  /* ============================================================
+     BODY  (sidebar | main | right rail)
+     ============================================================ */
+  .body {
+    display: grid;
+    grid-template-columns: var(--w-side-l) 1fr;
+    min-height: 0;
+  }
+  .body.has-rail { grid-template-columns: var(--w-side-l) 1fr var(--w-rr); }
+  .body.expanded { grid-template-columns: var(--w-side) 1fr; }
+  .body.expanded.has-rail { grid-template-columns: var(--w-side) 1fr var(--w-rr); }
+
+  /* ============================================================
+     SIDEBAR  (collapsed icon rail)
+     ============================================================ */
+  .sidebar {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 4px;
+    border-right: 1px solid var(--border);
+  }
+  .body.expanded .sidebar {
+    align-items: stretch;
+    padding: 0;
+    background: var(--bg-1);
+  }
+
+  .side-icon {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--r-1);
+    color: var(--fg-2);
+    cursor: pointer;
+    position: relative;
+    font-size: 14px;
+    font-family: var(--font-mono);
+  }
+  .side-icon:hover { background: var(--bg-2); color: var(--fg); }
+  .side-icon.active { color: var(--accent); background: var(--bg-2); }
+  .side-icon .badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 999px;
+    font-size: 9.5px;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    display: grid;
+    place-items: center;
+  }
+  .side-spacer { flex: 1; }
+
+  .body.expanded .side-icon {
+    width: auto;
+    height: auto;
+    margin: 0 8px;
+    padding: 6px 10px;
+    justify-content: flex-start;
+    gap: 8px;
+    border-radius: var(--r-1);
+  }
+  .body.expanded .side-icon span.lbl { font-family: var(--font-ui); font-size: var(--fs-sm); }
+
+  /* Expanded sidebar contents */
+  .side-full {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .body.expanded .side-full { display: flex; }
+
+  .side-search {
+    margin: 12px 12px 8px;
+    height: 32px;
+    background: var(--bg-2);
+    border: 1px solid transparent;
+    border-radius: var(--r-1);
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    color: var(--fg-3);
+    font-size: var(--fs-sm);
+    transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+  }
+  .side-search:focus-within { border-color: var(--accent); background: var(--bg); }
+  .side-search input { flex: 1; background: transparent; border: 0; color: var(--fg); font: inherit; font-size: var(--fs-sm); outline: none; }
+  .side-search .kbd-hint { font-family: var(--font-mono); font-size: 10px; color: var(--fg-4); }
+
+  .side-section { padding: 6px 0; }
+  .side-section-label {
+    padding: 4px 14px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-4);
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+  }
+  .side-section-label .count {
+    background: var(--bg-2);
+    color: var(--fg-3);
+    padding: 0 5px;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+  }
+
+  .sess {
+    margin: 1px 8px;
+    padding: 7px 10px;
+    border-radius: var(--r-1);
+    cursor: pointer;
+    color: var(--fg-2);
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .sess:hover { background: var(--bg-2); color: var(--fg); }
+  .sess.active { background: var(--accent-soft); color: var(--fg); }
+  .sess-title {
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sess.active .sess-title { color: var(--accent); }
+  .sess-meta {
+    margin-top: 2px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--fg-4);
+  }
+  .sess.active .sess-meta { color: var(--fg-3); }
+  .sess-meta .pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+  .sess-meta .diff { color: var(--fg-4); }
+  .sess-meta .diff .add { color: var(--ok); }
+  .sess-meta .diff .rem { color: var(--err); }
+
+  .side-footer {
+    margin-top: auto;
+    border-top: 1px solid var(--border);
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--fg-4);
+  }
+  .side-footer .kbd {
+    background: var(--bg-2);
+    border-radius: var(--r-1);
+    padding: 1px 5px;
+    color: var(--fg-3);
+    border: 1px solid var(--border);
+  }
+
+  /* ============================================================
+     MAIN  (chat area)
+     ============================================================ */
+  .main {
+    background: var(--bg);
+    display: grid;
+    grid-template-rows: 1fr auto;
+    min-width: 0;
+    min-height: 0;
+  }
+  .chat-scroll {
+    overflow-y: auto;
+    padding: 32px 24px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .msg { max-width: var(--chat-max); width: 100%; margin: 0 auto; }
+  .msg-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--fg-4);
+    font-family: var(--font-mono);
+    margin-bottom: 4px;
+  }
+  .msg-meta .role { color: var(--fg-3); }
+  .msg-meta .tag {
+    background: var(--bg-1);
+    color: var(--fg-3);
+    padding: 1px 6px;
+    border-radius: var(--r-1);
+  }
+
+  .msg-user {
+    align-self: stretch;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .msg-user .bubble {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+    padding: 10px 14px;
+    max-width: 78%;
+    font-size: var(--fs-md);
+    line-height: 1.55;
+    color: var(--fg);
+  }
+
+  .msg-assistant {
+    align-self: stretch;
+    color: var(--fg);
+    font-size: var(--fs-md);
+    line-height: 1.65;
+  }
+  .msg-assistant .body-text { white-space: pre-wrap; }
+  .msg-assistant .cursor {
+    display: inline-block;
+    width: 7px;
+    height: 15px;
+    background: var(--accent);
+    vertical-align: text-bottom;
+    margin-left: 1px;
+    border-radius: 1px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .thinking-row {
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--fg-3);
+  }
+  .thinking-row summary {
+    cursor: pointer;
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+  }
+  .thinking-row summary::-webkit-details-marker { display: none; }
+  .thinking-row .chev { color: var(--fg-4); }
+  .thinking-row pre {
+    margin-top: 8px;
+    background: var(--bg-1);
+    border-radius: var(--r-1);
+    padding: 8px 12px;
+    color: var(--fg-3);
+    white-space: pre-wrap;
+    font: 11px/1.5 var(--font-mono);
+  }
+
+  .tool-card {
+    margin-top: 10px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+    overflow: hidden;
+  }
+  .tool-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--fg-2);
+    border-bottom: 1px solid transparent;
+  }
+  .tool-card.expanded .tool-head { border-bottom-color: var(--border); }
+  .tool-head .pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ok);
+  }
+  .tool-head .pulse.pending { background: var(--fg-3); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+  .tool-head .name { color: var(--fg); font-weight: 500; }
+  .tool-head .arg { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-3); }
+  .tool-head .time { color: var(--fg-4); font-size: 10.5px; }
+  .tool-body {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tool-section { font-family: var(--font-mono); font-size: 11px; }
+  .tool-section .lbl { color: var(--fg-4); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; margin-bottom: 4px; font-size: 10px; }
+  .tool-section pre {
+    background: var(--bg-2);
+    border-radius: var(--r-1);
+    padding: 8px 10px;
+    color: var(--fg-2);
+    overflow-x: auto;
+    font: 11px/1.5 var(--font-mono);
+  }
+
+  /* ============================================================
+     COMPOSER
+     ============================================================ */
+  .composer-zone {
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    padding: 14px 24px 16px;
+  }
+  .composer {
+    max-width: var(--chat-max);
+    margin: 0 auto;
+    background: var(--bg-1);
+    border: 1px solid var(--border-2);
+    border-radius: 10px;
+    padding: 10px 12px 8px;
+    transition: border-color var(--t-fast) var(--ease);
+  }
+  .composer:focus-within { border-color: var(--accent); }
+
+  .composer-caption {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .composer-left, .composer-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--fs-xs);
+    color: var(--fg-3);
+    font-family: var(--font-mono);
+  }
+  .cap {
+    background: transparent;
+    border: 0;
+    color: var(--fg-3);
+    padding: 2px 8px;
+    margin: 0 -8px;
+    font: inherit;
+    cursor: pointer;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  }
+  .cap:hover { background: var(--bg-2); color: var(--fg); }
+  .cap .sep { color: var(--fg-4); }
+  .cap .caret { color: var(--fg-4); font-size: 9px; }
+
+  .composer-input {
+    width: 100%;
+    min-height: 80px;
+    max-height: 280px;
+    resize: none;
+    background: transparent;
+    border: 0;
+    color: var(--fg);
+    font: 14.5px/1.55 var(--font-ui);
+    outline: none;
+  }
+  .composer-input::placeholder { color: var(--fg-4); }
+
+  .composer-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
+    padding: 0 2px;
+    font-size: var(--fs-xs);
+    font-family: var(--font-mono);
+    color: var(--fg-4);
+  }
+  .composer-send {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent);
+    color: #fff;
+    border: 0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font: 12px var(--font-ui);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease);
+  }
+  .composer-send:hover:not(:disabled) { background: var(--accent-2); }
+  .composer-send:disabled { background: var(--bg-2); color: var(--fg-4); cursor: not-allowed; }
+  .composer-send .arrow {
+    display: inline-grid;
+    place-items: center;
+    width: 14px; height: 14px;
+    background: rgba(255,255,255,0.18);
+    border-radius: 4px;
+    font-size: 10px;
+  }
+
+  /* ============================================================
+     RIGHT RAIL  (context / files / changes)
+     ============================================================ */
+  .rr {
+    background: var(--bg-1);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .rr-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .rr-head .label { color: var(--fg-3); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .rr-tabs { display: flex; gap: 2px; }
+  .rr-tab {
+    background: transparent;
+    border: 0;
+    color: var(--fg-3);
+    padding: 4px 8px;
+    font: 11.5px var(--font-ui);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .rr-tab:hover { background: var(--bg-2); color: var(--fg); }
+  .rr-tab.active { background: var(--bg-2); color: var(--fg); }
+
+  .rr-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .rr-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-2);
+    overflow: hidden;
+  }
+  .rr-card-head {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .rr-card-body { padding: 10px 12px; font-size: 12px; color: var(--fg-2); }
+
+  .context-file {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+  }
+  .file-icon {
+    width: 28px; height: 28px;
+    background: var(--bg-2);
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    color: var(--fg-3);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    border: 1px solid var(--border);
+  }
+  .context-file .name { font-size: 12.5px; color: var(--fg); font-weight: 500; }
+  .context-file .path { font-size: 11px; font-family: var(--font-mono); color: var(--fg-4); }
+
+  .token-bar {
+    height: 6px;
+    background: var(--bg-2);
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 6px 0 4px;
+  }
+  .token-bar .fill { height: 100%; background: linear-gradient(90deg, var(--accent) 0%, #8aaaf7 100%); border-radius: 999px; }
+  .token-line { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); }
+
+  .change-row {
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+  .change-row .path { color: var(--fg-2); }
+  .change-row .stats { color: var(--fg-4); }
+  .change-row .stats .add { color: var(--ok); }
+  .change-row .stats .rem { color: var(--err); }
+
+  /* ============================================================
+     NOTES
+     ============================================================ */
+  .notes {
+    max-width: 980px;
+    margin: 56px auto 0;
+    padding: 28px 32px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--fg-2);
+    font-size: 13.5px;
+    line-height: 1.7;
+  }
+  .notes h2 {
+    color: var(--fg);
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0 0 14px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .notes h2:not(:first-child) { margin-top: 22px; }
+  .notes .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 32px;
+  }
+  .notes .grid dt {
+    color: var(--fg-3);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+  }
+  .notes .grid dd { color: var(--fg); margin-bottom: 4px; }
+  .notes ul { padding-left: 20px; color: var(--fg-2); }
+  .notes li { margin-bottom: 4px; }
+  .notes code {
+    background: var(--bg-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--fg);
+  }
+</style>
+</head>
+<body>
+
+<h1>Pi Desktop — Style F · WorkBuddy-inspired <small>三个状态 · 自上而下</small></h1>
+
+<!-- ======================================================
+     STATE 1: Default (sidebar collapsed, no right rail)
+     ====================================================== -->
+<div class="row">
+  <div class="stack">
+    <div class="window">
+      <div class="topbar">
+        <div class="tb-left">
+          <div class="window-controls">
+            <button class="wc close"></button>
+            <button class="wc min"></button>
+            <button class="wc max"></button>
+          </div>
+          <button class="btn-icon" title="Expand sidebar (⌘\)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/></svg>
+          </button>
+          <div class="brand">
+            <span class="brand-logo">π</span>
+            <span class="status-dot" title="ready"></span>
+          </div>
+        </div>
+        <div class="tb-mid">
+          <button class="session-pill">
+            <span class="glyph">Session</span>
+            <span class="sep">·</span>
+            <span class="title">refactor streaming handler</span>
+            <span class="caret">▾</span>
+          </button>
+        </div>
+        <div class="tb-right">
+          <button class="btn-icon" title="New chat (⌘N)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button class="btn-icon" title="Command palette (⌘K)">
+            <span style="font-family: var(--font-mono); font-size: 11px; opacity: 0.85;">⌘K</span>
+          </button>
+          <button class="btn-icon" title="Settings (⌘,)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="body">
+        <!-- Sidebar collapsed -->
+        <aside class="sidebar">
+          <button class="side-icon" title="π · Pi">
+            <span style="font-style: italic;">π</span>
+          </button>
+          <button class="side-icon" title="New chat (⌘N)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button class="side-icon active" title="Sessions">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span class="badge">12</span>
+          </button>
+          <button class="side-icon" title="Files (⌘B)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2z"/></svg>
+          </button>
+          <button class="side-icon" title="Terminal (⌘J)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 17 6-6-6-6M12 19h8"/></svg>
+          </button>
+          <div class="side-spacer"></div>
+          <button class="side-icon" title="Command palette (⌘K)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/></svg>
+          </button>
+        </aside>
+
+        <main class="main">
+          <div class="chat-scroll">
+            <div class="msg msg-user">
+              <div class="bubble">refactor the streaming handler to coalesce deltas per frame</div>
+            </div>
+
+            <div class="msg msg-assistant">
+              <div class="msg-meta">
+                <span class="role">pi</span>
+                <span>·</span>
+                <span>2.1s</span>
+                <span>·</span>
+                <span>1.2k tokens</span>
+                <span>·</span>
+                <span class="tag">react 19</span>
+              </div>
+              <div class="body-text">Will batch <code style="background:var(--bg-1);padding:1px 5px;border-radius:3px;font:12.5px var(--font-mono);">text_delta</code> / <code style="background:var(--bg-1);padding:1px 5px;border-radius:3px;font:12.5px var(--font-mono);">thinking_delta</code> into a per-frame buffer using <code style="background:var(--bg-1);padding:1px 5px;border-radius:3px;font:12.5px var(--font-mono);">requestAnimationFrame</code>. Render frequency caps at display refresh instead of token rate. <code style="background:var(--bg-1);padding:1px 5px;border-radius:3px;font:12.5px var(--font-mono);">MessageRow</code> gets <code style="background:var(--bg-1);padding:1px 5px;border-radius:3px;font:12.5px var(--font-mono);">React.memo</code> so history rows skip the recompute<span class="cursor"></span></div>
+
+              <div class="tool-card expanded">
+                <div class="tool-head">
+                  <span class="pulse"></span>
+                  <span class="name">read</span>
+                  <span class="arg">~/Developer/pi-desktop/src/App.tsx</span>
+                  <span class="time">142ms</span>
+                </div>
+                <div class="tool-body">
+                  <div class="tool-section">
+                    <div class="lbl">arguments</div>
+                    <pre>{ "path": "/Users/ysl/Developer/pi-desktop/src/App.tsx", "limit": 240 }</pre>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tool-card">
+                <div class="tool-head">
+                  <span class="pulse pending"></span>
+                  <span class="name">edit</span>
+                  <span class="arg">App.tsx:228 — buffer text_delta into pendingTextRef</span>
+                  <span class="time">running…</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="msg msg-user">
+              <div class="bubble">also remove the per-token eprintln on the rust side</div>
+            </div>
+
+            <div class="msg msg-assistant">
+              <div class="msg-meta">
+                <span class="role">pi</span>
+                <span>·</span>
+                <span style="color: var(--accent);">thinking (3s) ▸</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="composer-zone">
+            <div class="composer">
+              <div class="composer-caption">
+                <div class="composer-left">
+                  <button class="cap" title="Working directory: /Users/ysl/Developer/pi-desktop">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2z"/></svg>
+                    pi-desktop
+                  </button>
+                </div>
+                <div class="composer-right">
+                  <button class="cap" title="Model + thinking">
+                    minimax/M3
+                    <span class="sep">·</span>
+                    <span style="color: var(--accent);">medium</span>
+                    <span style="color: var(--fg-4);">(9)</span>
+                    <span class="caret">▾</span>
+                  </button>
+                </div>
+              </div>
+              <textarea class="composer-input" placeholder="Ask pi anything. Enter to send, Shift+Enter for newline."></textarea>
+              <div class="composer-foot">
+                <span>0 files attached · ⏎ to send, ⇧⏎ for newline</span>
+                <button class="composer-send">
+                  <span>Send</span>
+                  <span class="arrow">⏎</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div class="label">1 · Default · sidebar collapsed · 48px chrome</div>
+  </div>
+</div>
+
+<!-- ======================================================
+     STATE 2: Sidebar expanded
+     ====================================================== -->
+<div class="row">
+  <div class="stack">
+    <div class="window">
+      <div class="topbar">
+        <div class="tb-left">
+          <div class="window-controls">
+            <button class="wc close"></button>
+            <button class="wc min"></button>
+            <button class="wc max"></button>
+          </div>
+          <button class="btn-icon active" title="Collapse sidebar (⌘\)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/></svg>
+          </button>
+          <div class="brand">
+            <span class="brand-logo">π</span>
+            <span class="status-dot" title="ready"></span>
+          </div>
+        </div>
+        <div class="tb-mid">
+          <button class="session-pill">
+            <span class="glyph">Session</span>
+            <span class="sep">·</span>
+            <span class="title">refactor streaming handler</span>
+            <span class="caret">▾</span>
+          </button>
+        </div>
+        <div class="tb-right">
+          <button class="btn-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button class="btn-icon"><span style="font-family: var(--font-mono); font-size: 11px;">⌘K</span></button>
+          <button class="btn-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+        </div>
+      </div>
+
+      <div class="body expanded">
+        <!-- Sidebar expanded -->
+        <aside class="sidebar">
+          <button class="side-icon" title="π · Pi" style="margin-top: 12px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+            <span class="lbl">Pi Desktop</span>
+          </button>
+          <button class="side-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <span class="lbl">New chat</span>
+          </button>
+
+          <div class="side-full">
+            <div class="side-search">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              <input placeholder="Search sessions…" />
+              <span class="kbd-hint">⌘K</span>
+            </div>
+
+            <div class="side-section">
+              <div class="side-section-label">Today <span class="count">5</span></div>
+              <div class="sess active">
+                <div class="sess-title">refactor streaming handler</div>
+                <div class="sess-meta">
+                  <span class="pulse"></span>
+                  <span>2m ago</span>
+                  <span>·</span>
+                  <span>17 msg</span>
+                  <span>·</span>
+                  <span class="diff"><span class="add">+42</span> <span class="rem">-18</span></span>
+                </div>
+              </div>
+              <div class="sess">
+                <div class="sess-title">side panel collapse state</div>
+                <div class="sess-meta">
+                  <span>12m ago</span>
+                  <span>·</span>
+                  <span>9 msg</span>
+                </div>
+              </div>
+              <div class="sess">
+                <div class="sess-title">tag caret tokens</div>
+                <div class="sess-meta">
+                  <span>1h ago</span>
+                  <span>·</span>
+                  <span>23 msg</span>
+                  <span>·</span>
+                  <span class="diff"><span class="add">+8</span> <span class="rem">-3</span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="side-section">
+              <div class="side-section-label">Yesterday <span class="count">4</span></div>
+              <div class="sess">
+                <div class="sess-title">session sidebar layout</div>
+                <div class="sess-meta"><span>1d ago</span></div>
+              </div>
+              <div class="sess">
+                <div class="sess-title">react.memo boundaries</div>
+                <div class="sess-meta"><span>1d ago</span></div>
+              </div>
+            </div>
+
+            <div class="side-footer">
+              <span>12 active</span>
+              <span class="kbd">⌘K cmd</span>
+            </div>
+          </div>
+        </aside>
+
+        <main class="main">
+          <div class="chat-scroll">
+            <div class="msg msg-user">
+              <div class="bubble">refactor the streaming handler to coalesce deltas per frame</div>
+            </div>
+            <div class="msg msg-assistant">
+              <div class="msg-meta">
+                <span class="role">pi</span><span>·</span><span>2.1s</span><span>·</span><span>1.2k tokens</span>
+              </div>
+              <div class="body-text">Will batch <code style="background:var(--bg-1);padding:1px 5px;border-radius:3px;font:12.5px var(--font-mono);">text_delta</code> into a per-frame buffer using <code style="background:var(--bg-1);padding:1px 5px;border-radius:3px;font:12.5px var(--font-mono);">requestAnimationFrame</code><span class="cursor"></span></div>
+            </div>
+          </div>
+
+          <div class="composer-zone">
+            <div class="composer">
+              <div class="composer-caption">
+                <div class="composer-left">
+                  <button class="cap">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2z"/></svg>
+                    pi-desktop
+                  </button>
+                </div>
+                <div class="composer-right">
+                  <button class="cap">minimax/M3 <span class="sep">·</span> <span style="color: var(--accent);">medium</span> <span class="caret">▾</span></button>
+                </div>
+              </div>
+              <textarea class="composer-input" placeholder="Ask pi anything…"></textarea>
+              <div class="composer-foot">
+                <span>0 files attached</span>
+                <button class="composer-send"><span>Send</span><span class="arrow">⏎</span></button>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <div class="label">2 · Sidebar expanded · 260px · sessions visible</div>
+  </div>
+</div>
+
+<!-- ======================================================
+     STATE 3: With right rail (context panel)
+     ====================================================== -->
+<div class="row">
+  <div class="stack">
+    <div class="window">
+      <div class="topbar">
+        <div class="tb-left">
+          <div class="window-controls">
+            <button class="wc close"></button>
+            <button class="wc min"></button>
+            <button class="wc max"></button>
+          </div>
+          <button class="btn-icon" title="Expand sidebar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/></svg>
+          </button>
+          <div class="brand">
+            <span class="brand-logo">π</span>
+            <span class="status-dot"></span>
+          </div>
+        </div>
+        <div class="tb-mid">
+          <button class="session-pill">
+            <span class="glyph">Session</span><span class="sep">·</span><span class="title">refactor streaming handler</span><span class="caret">▾</span>
+          </button>
+        </div>
+        <div class="tb-right">
+          <button class="btn-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button class="btn-icon"><span style="font-family: var(--font-mono); font-size: 11px;">⌘K</span></button>
+          <button class="btn-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>
+        </div>
+      </div>
+
+      <div class="body has-rail">
+        <aside class="sidebar">
+          <button class="side-icon" title="π · Pi"><span style="font-style: italic;">π</span></button>
+          <button class="side-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button class="side-icon active"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="badge">12</span></button>
+          <button class="side-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2z"/></svg></button>
+          <button class="side-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 17 6-6-6-6M12 19h8"/></svg></button>
+          <div class="side-spacer"></div>
+          <button class="side-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"/></svg></button>
+        </aside>
+
+        <main class="main">
+          <div class="chat-scroll">
+            <div class="msg msg-assistant">
+              <div class="msg-meta">
+                <span class="role">pi</span><span>·</span><span>5.2s</span><span>·</span><span>4.8k tokens</span>
+              </div>
+              <div class="body-text">Coalescing rAF flushes cap renders at 60fps regardless of token rate. The Rust read loop should also drop debug-only logs in release. Suggested staging<span class="cursor"></span></div>
+            </div>
+          </div>
+          <div class="composer-zone">
+            <div class="composer">
+              <div class="composer-caption">
+                <div class="composer-left">
+                  <button class="cap">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2z"/></svg>
+                    pi-desktop
+                  </button>
+                </div>
+                <div class="composer-right">
+                  <button class="cap">minimax/M3 <span class="sep">·</span> <span style="color: var(--accent);">medium</span> <span class="caret">▾</span></button>
+                </div>
+              </div>
+              <textarea class="composer-input" placeholder="Reply to pi…"></textarea>
+              <div class="composer-foot">
+                <span>3 files attached</span>
+                <button class="composer-send"><span>Send</span><span class="arrow">⏎</span></button>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <aside class="rr">
+          <div class="rr-head">
+            <span class="label">Context</span>
+            <div class="rr-tabs">
+              <button class="rr-tab active">Context</button>
+              <button class="rr-tab">Files</button>
+              <button class="rr-tab">Changes</button>
+            </div>
+          </div>
+          <div class="rr-body">
+            <div class="rr-card">
+              <div class="rr-card-head">Current file</div>
+              <div class="rr-card-body">
+                <div class="context-file">
+                  <div class="file-icon">TS</div>
+                  <div>
+                    <div class="name">App.tsx</div>
+                    <div class="path">src/App.tsx · 539 lines</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rr-card">
+              <div class="rr-card-head">Tokens this session</div>
+              <div class="rr-card-body">
+                <div class="token-bar"><div class="fill" style="width: 62%;"></div></div>
+                <div class="token-line"><span>9.3k / 15k</span><span>62%</span></div>
+              </div>
+            </div>
+
+            <div class="rr-card">
+              <div class="rr-card-head">Recent edits</div>
+              <div class="rr-card-body">
+                <div class="change-row">
+                  <span class="path">src/App.tsx</span>
+                  <span class="stats"><span class="add">+42</span> <span class="rem">-18</span></span>
+                </div>
+                <div class="change-row">
+                  <span class="path">src-tauri/src/lib.rs</span>
+                  <span class="stats"><span class="add">+8</span> <span class="rem">-22</span></span>
+                </div>
+                <div class="change-row">
+                  <span class="path">src/styles.css</span>
+                  <span class="stats"><span class="add">+12</span> <span class="rem">-4</span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rr-card">
+              <div class="rr-card-head">Tools · 3 calls</div>
+              <div class="rr-card-body" style="display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;justify-content:space-between;color:var(--fg-3);">
+                  <span style="font-family:var(--font-mono);font-size:12px;">read</span>
+                  <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-4);">142ms</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;color:var(--fg-3);">
+                  <span style="font-family:var(--font-mono);font-size:12px;">edit</span>
+                  <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-4);">128ms</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;color:var(--accent);">
+                  <span style="font-family:var(--font-mono);font-size:12px;">bash</span>
+                  <span style="font-family:var(--font-mono);font-size:11px;color:var(--accent);">running…</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <div class="label">3 · With right rail · context panel · Files / Changes tabs</div>
+  </div>
+</div>
+
+<!-- ======================================================
+     NOTES
+     ====================================================== -->
+<div class="notes">
+  <h2>Style F · 设计决策</h2>
+  <dl class="grid">
+    <dt>底色</dt><dd>#1a1a1f（带蓝紫调灰，非 pure-black）</dd>
+    <dt>sidebar bg</dt><dd>#232329（比主底亮 1.7%，靠这一档做层级）</dd>
+    <dt>主区 bg</dt><dd>同底色，不画框，靠 padding 撑空间</dd>
+    <dt>active row</dt><dd>accent-soft 染色（不是灰），跟品牌色一致</dd>
+    <dt>字体</dt><dd>14.5px ui / 12.5px mono caption，5 级 scale</dd>
+    <dt>圆角</dt><dd>最大 10px（composer 容器），其他 4-6px</dd>
+    <dt>session row</dt><dd>title 加粗 12.5px + meta 行 10.5px mono，复用颜色梯度</dd>
+    <dt>send 按钮</dt><dd>accent 实色背景 + 白字 + 内嵌 ⏎ arrow chip</dd>
+    <dt>右栏</dt><dd>默认隐藏；按 ⌘. 唤起，Context / Files / Changes 三 tab</dd>
+    <dt>session pill</dt><dd>圆角胶囊，Session · title · ▾，点开 → ⌘K 切换</dd>
+  </dl>
+
+  <h2>与现状的差异</h2>
+  <ul>
+    <li><strong>顶栏不再裸露</strong>：从左侧 traffic-light 直接开始，sidebar toggle 作为第一个 icon；中间放 session pill 胶囊，右侧 3 个 icon button</li>
+    <li><strong>sidebar 始终有视觉差异</strong>：折叠态是 48px icon-rail（与主区同底色）；展开态下沉到 bg-1，与主区形成 1.7% 亮度差</li>
+    <li><strong>active row 用品牌色</strong>：不是灰色 bg-3，而是 accent-soft，accent 文字——能"一眼看到"当前在哪</li>
+    <li><strong>send 按钮变实色</strong>：从"灰色 ⏎ 提示"变成带 ⏎ chip 的 accent 主按钮，可点击目标大 24×</li>
+    <li><strong>右栏有内容</strong>：当前文件 / token 进度 / 改动文件 / 工具调用记录——不再是空架子</li>
+    <li><strong>caption 用 pill</strong>：model / cwd 用 999px 圆角胶囊，跟 session pill 视觉一致，整体节奏更顺</li>
+  </ul>
+
+  <h2>交互节奏</h2>
+  <ul>
+    <li>顶栏所有按钮 32×32 实心触控区</li>
+    <li>sidebar 折叠/展开 200ms ease-out</li>
+    <li>composer focus-within 边框由 var(--border-2) → accent，110ms</li>
+    <li>active session pulse 1.2s 呼吸</li>
+    <li>右栏唤起从右侧 200ms slide-in</li>
+  </ul>
+
+  <h2>下一步选择</h2>
+  <ul>
+    <li>确认 → 落地 styles.css token + 重写 5 个组件（Titlebar / Sidebar / Composer / RightRail / StatusBar 视情况）</li>
+    <li>微调某个具体设计点 → 告诉我哪个</li>
+    <li>换风格 → 给个具体参考（VS Code / Cursor / Raycast / Arc / Linear …）</li>
+  </ul>
+</div>
+
+</body>
+</html>

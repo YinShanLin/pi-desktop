@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1100" />
+<title>Pi Desktop — Style E Mockup</title>
+<style>
+  :root {
+    /* Style E tokens */
+    --bg: #0b0b0c;
+    --bg-1: #131316;
+    --bg-2: #1b1b1f;
+    --fg: #e8e8ea;
+    --fg-2: #9b9ba1;
+    --fg-3: #6c6c72;
+    --fg-4: #444448;
+    --border: rgba(255,255,255,0.06);
+    --border-2: rgba(255,255,255,0.10);
+    --accent: #7aa2ff;
+    --accent-2: #5a86e8;
+    --accent-soft: rgba(122,162,255,0.10);
+    --ok: #4ade80;
+    --err: #f87171;
+    --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050506;
+    font-family: var(--font-ui);
+    color: var(--fg);
+    padding: 32px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg-3);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: nowrap;
+    justify-content: center;
+  }
+  .frame {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .frame-label {
+    font-size: 11px;
+    color: var(--fg-3);
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+  .window {
+    width: 1100px;
+    height: 750px;
+    background: var(--bg);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  /* ===== Top hairline drag area + status (28px) ===== */
+  .topbar {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px 0 16px;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10.5px;
+    color: var(--fg-3);
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+  }
+  .topbar .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ok);
+  }
+  .topbar .sep { opacity: 0.4; }
+  .topbar .right {
+    margin-left: auto;
+    color: var(--fg-4);
+  }
+
+  /* ===== Body ===== */
+  .body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+
+  /* ===== Icon rail (collapsed 48px) ===== */
+  .rail {
+    width: 48px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 0;
+    gap: 2px;
+    border-right: 1px solid var(--border);
+  }
+  .rail-icon {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    color: var(--fg-2);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: var(--font-mono);
+    position: relative;
+  }
+  .rail-icon:hover { background: var(--bg-1); color: var(--fg); }
+  .rail-icon.active { color: var(--accent); }
+  .rail-icon .badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 4px;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 600;
+    display: grid;
+    place-items: center;
+  }
+  .rail-spacer { flex: 1; }
+
+  /* ===== Sidebar (expanded 240px) ===== */
+  .sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-head {
+    padding: 12px 12px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-head .search {
+    flex: 1;
+    height: 28px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 8px;
+    color: var(--fg-3);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+  }
+  .sidebar-head .kbd {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--fg-4);
+  }
+  .sidebar-section {
+    padding: 8px 0;
+  }
+  .sidebar-section-label {
+    padding: 4px 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-4);
+    font-weight: 500;
+  }
+  .session-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--fg-2);
+    cursor: pointer;
+  }
+  .session-row:hover { background: var(--bg-2); color: var(--fg); }
+  .session-row.active {
+    background: var(--accent-soft);
+    color: var(--fg);
+  }
+  .session-row .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .session-row .title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .session-row .meta {
+    font-size: 10px;
+    color: var(--fg-4);
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+  }
+
+  /* ===== Main ===== */
+  .main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 24px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg {
+    max-width: 760px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .msg-user {
+    align-self: flex-end;
+    max-width: 78%;
+  }
+  .bubble-user {
+    background: var(--accent-soft);
+    border: 1px solid var(--border-2);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .msg-assistant {
+    align-self: stretch;
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: var(--fg);
+  }
+  .msg-assistant .meta {
+    font-size: 10.5px;
+    color: var(--fg-4);
+    font-family: var(--font-mono);
+    margin-bottom: 4px;
+  }
+  .msg-assistant .meta .label { color: var(--fg-3); }
+  .msg-assistant .text { white-space: pre-wrap; }
+  .msg-assistant .cursor {
+    display: inline-block;
+    width: 6px;
+    height: 13px;
+    background: var(--accent);
+    vertical-align: text-bottom;
+    margin-left: 1px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .tool-row {
+    margin-top: 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-1);
+    overflow: hidden;
+  }
+  .tool-row .summary {
+    height: 28px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--fg-2);
+    font-family: var(--font-mono);
+    cursor: pointer;
+  }
+  .tool-row .summary:hover { background: var(--bg-2); }
+  .tool-row .summary .dot {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--ok);
+  }
+  .tool-row .summary .name { color: var(--fg); font-weight: 500; }
+  .tool-row .summary .arg { color: var(--fg-3); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tool-row .summary .time { color: var(--fg-4); font-size: 10.5px; }
+
+  /* ===== Composer ===== */
+  .composer {
+    border-top: 1px solid var(--border);
+    padding: 10px 24px 12px;
+    flex-shrink: 0;
+  }
+  .composer-inner {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+  .composer-caption {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    color: var(--fg-3);
+    font-family: var(--font-mono);
+    padding: 0 4px 6px;
+    cursor: pointer;
+  }
+  .composer-caption .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--fg-4); }
+  .composer-caption .right { margin-left: auto; color: var(--fg-4); }
+  .composer-input {
+    width: 100%;
+    min-height: 56px;
+    max-height: 240px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    color: var(--fg);
+    font-size: 13.5px;
+    line-height: 1.55;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+  }
+  .composer-input:focus { border-color: var(--accent); }
+  .composer-input::placeholder { color: var(--fg-4); }
+  .composer-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 4px 0;
+    font-size: 10px;
+    color: var(--fg-4);
+    font-family: var(--font-mono);
+  }
+  .composer-meta .send {
+    color: var(--fg-2);
+  }
+  .composer-meta .send b { color: var(--fg); font-weight: 500; }
+
+  /* ===== Command palette overlay ===== */
+  .palette-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: grid;
+    place-items: center;
+    z-index: 10;
+  }
+  .palette {
+    width: 560px;
+    background: var(--bg-1);
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+  .palette-input {
+    width: 100%;
+    height: 44px;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    color: var(--fg);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+  }
+  .palette-input::placeholder { color: var(--fg-3); }
+  .palette-list {
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 6px;
+  }
+  .palette-group-label {
+    padding: 8px 10px 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-4);
+    font-weight: 500;
+  }
+  .palette-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--fg-2);
+    cursor: pointer;
+  }
+  .palette-item:hover, .palette-item.selected {
+    background: var(--bg-2);
+    color: var(--fg);
+  }
+  .palette-item .icon {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    color: var(--fg-3);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .palette-item .label { flex: 1; }
+  .palette-item .kbd {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--fg-4);
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+  .palette-footer {
+    border-top: 1px solid var(--border);
+    padding: 8px 12px;
+    display: flex;
+    gap: 12px;
+    font-size: 10px;
+    color: var(--fg-4);
+    font-family: var(--font-mono);
+  }
+  .palette-footer .key {
+    color: var(--fg-3);
+    margin-right: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Pi Desktop — Style E · three states</h1>
+
+<div class="row">
+
+  <!-- ============== MOCKUP 1: Default (sidebar folded) ============== -->
+  <div class="frame">
+    <div class="frame-label">1 · Default · 48px icon-rail</div>
+    <div class="window">
+      <div class="topbar">
+        <span class="dot"></span>
+        <span class="sep">·</span>
+        <span>~/Developer/pi-desktop</span>
+        <span class="sep">·</span>
+        <span>ready</span>
+        <span class="right">minimax · M3 · medium</span>
+      </div>
+      <div class="body">
+        <div class="rail">
+          <div class="rail-icon" style="font-style: italic;">π</div>
+          <div class="rail-icon">+</div>
+          <div class="rail-icon active">≡<span class="badge">3</span></div>
+          <div class="rail-icon">⌘</div>
+          <div class="rail-spacer"></div>
+          <div class="rail-icon" style="font-size:11px;">⚙</div>
+        </div>
+        <div class="main">
+          <div class="messages">
+            <div class="msg msg-user">
+              <div class="bubble-user">refactor the streaming handler to coalesce deltas per frame</div>
+            </div>
+            <div class="msg msg-assistant">
+              <div class="meta"><span class="label">pi</span> · 2s · 1.2k tokens</div>
+              <div class="text">Will batch text_delta / thinking_delta into a per-frame buffer using requestAnimationFrame. Render frequency caps at display refresh instead of token rate. MessageRow gets React.memo so history rows skip the recompute<span class="cursor"></span></div>
+              <div class="tool-row">
+                <div class="summary">
+                  <span class="dot"></span>
+                  <span class="name">read</span>
+                  <span class="arg">~/Developer/pi-desktop/src/App.tsx</span>
+                  <span class="time">42ms</span>
+                </div>
+              </div>
+              <div class="tool-row">
+                <div class="summary">
+                  <span class="dot"></span>
+                  <span class="name">edit</span>
+                  <span class="arg">App.tsx:228 — buffer text_delta into pendingTextRef</span>
+                  <span class="time">128ms</span>
+                </div>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="bubble-user">also remove the per-token eprintln on the rust side</div>
+            </div>
+            <div class="msg msg-assistant">
+              <div class="meta"><span class="label">pi</span> · thinking (3s) ▸</div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="composer-inner">
+              <div class="composer-caption">
+                <span>minimax · M3</span>
+                <span class="dot"></span>
+                <span>medium</span>
+                <span class="right">⌘K palette</span>
+              </div>
+              <textarea class="composer-input" placeholder="Ask pi anything. Enter to send, Shift+Enter for newline."></textarea>
+              <div class="composer-meta">
+                <span>0 files attached</span>
+                <span class="send">Send <b>⏎</b></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============== MOCKUP 2: Sidebar expanded (hover) ============== -->
+  <div class="frame" style="display:none;">
+    <div class="frame-label">2 · Sidebar expanded on hover</div>
+    <div class="window">
+      <!-- same shell -->
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // hide the placeholder second frame; keep one full mockup + the palette below
+  document.querySelector('.frame:nth-child(2)').style.display = 'none';
+</script>
+
+<!-- ============== Palette overlay demo (full width, below) ============== -->
+<h1 style="margin-top:48px;">⌘K · Command Palette</h1>
+<div class="row">
+  <div class="frame" style="max-width:100%;">
+    <div class="frame-label">modal · 560×440</div>
+    <div class="window" style="width: 640px; height: 460px;">
+      <div class="palette-overlay" style="background: rgba(0,0,0,0.5);">
+        <div class="palette">
+          <input class="palette-input" placeholder="Type a command or search…" value="ses" />
+          <div class="palette-list">
+            <div class="palette-group-label">Sessions</div>
+            <div class="palette-item selected">
+              <span class="icon">·</span>
+              <span class="label">refactor streaming handler</span>
+              <span class="kbd">2m ago</span>
+            </div>
+            <div class="palette-item">
+              <span class="icon">·</span>
+              <span class="label">session sidebar layout</span>
+              <span class="kbd">1h ago</span>
+            </div>
+            <div class="palette-item">
+              <span class="icon">·</span>
+              <span class="label">fs plugin permissions</span>
+              <span class="kbd">yesterday</span>
+            </div>
+            <div class="palette-group-label">Commands</div>
+            <div class="palette-item">
+              <span class="icon">+</span>
+              <span class="label">New Chat</span>
+              <span class="kbd">⌘N</span>
+            </div>
+            <div class="palette-item">
+              <span class="icon">⌘</span>
+              <span class="label">Open Settings</span>
+              <span class="kbd">⌘,</span>
+            </div>
+          </div>
+          <div class="palette-footer">
+            <span><span class="key">↑↓</span>navigate</span>
+            <span><span class="key">⏎</span>select</span>
+            <span><span class="key">esc</span>close</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -34,6 +34,14 @@ export type Message = UserMessage | AssistantMessage | ToolMessage;
 
 export type ConnectionStatus = "disconnected" | "ready" | "busy" | "error";
 
+export type ModelOption = {
+  provider: string;
+  id: string;
+  name?: string;
+  reasoning?: boolean;
+  contextWindow?: number;
+};
+
 export interface ExtensionUiRequest {
   type: "extension_ui_request";
   id: string;
