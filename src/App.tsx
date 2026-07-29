@@ -12,8 +12,9 @@ import { sessionStore, type Session } from "./data/sessions";
 import { messageStore } from "./data/messages";
 import { useResizable } from "./hooks/useResizable";
 import { useTheme } from "./hooks/useTheme";
+import { useFont } from "./hooks/useFont";
 import { useShortcuts, type ShortcutBinding } from "./hooks/useShortcuts";
-import { SHORTCUTS, isMac } from "./lib/shortcuts";
+import { SHORTCUTS } from "./lib/shortcuts";
 import { Titlebar } from "./components/Titlebar";
 import { CollapsibleSidebar } from "./components/CollapsibleSidebar";
 import { SessionSidebar } from "./components/SessionSidebar";
@@ -46,6 +47,7 @@ export default function App() {
 
   // ---- Theme & settings -------------------------------------------------
   const { theme, toggleTheme } = useTheme();
+  const { font, setFont } = useFont();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // ---- Session state ----------------------------------------------------
@@ -68,7 +70,7 @@ export default function App() {
 
   // ---- Layout state -----------------------------------------------------
   const [railOpen, setRailOpen] = useState(false);
-  const [railTab, setRailTab] = useState<RailTab>("files");
+  const [railTab, setRailTab] = useState<RailTab>("context");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [sidebarLocked, setSidebarLocked] = useState(() => {
     try {
@@ -496,20 +498,16 @@ export default function App() {
     <div className={`app ${railOpen ? "rail-open" : "rail-closed"}`}>
       <Titlebar
         status={status}
-        sessionTitle={sessions.find((s) => s.id === activeSessionId)?.title ?? ""}
         sidebarLocked={sidebarLocked}
         onToggleSidebar={() => setSidebarLocked((v) => !v)}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
-        onNewChat={onNewChat}
       />
 
       <div className="app-body">
         <div className="sidebar-slot">
           <CollapsibleSidebar
-            badge={sessions.length}
             locked={sidebarLocked}
-            onNewChat={onNewChat}
             onOpenPalette={onOpenPalette}
           >
             <SessionSidebar
@@ -522,11 +520,7 @@ export default function App() {
               onArchive={onArchiveSession}
               onDelete={onDeleteSession}
               onOpenPalette={onOpenPalette}
-              onToggleFiles={() => { setRailOpen(true); setRailTab("files"); }}
-              onToggleTerminal={() => { setRailOpen(true); setRailTab("terminal"); }}
               onToggleRail={() => setRailOpen((v) => !v)}
-              cwd={cwd}
-              isMac={isMac}
             />
           </CollapsibleSidebar>
         </div>
@@ -588,7 +582,7 @@ export default function App() {
       )}
 
       {settingsOpen && (
-        <Settings theme={theme} onToggleTheme={toggleTheme} onClose={() => setSettingsOpen(false)} />
+        <Settings theme={theme} onToggleTheme={toggleTheme} font={font} onSetFont={setFont} onClose={() => setSettingsOpen(false)} />
       )}
 
       {paletteOpen && (

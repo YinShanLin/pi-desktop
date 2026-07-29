@@ -4,7 +4,7 @@ import type { MockFileNode } from "../data/mockFiles";
 import { mockFiles } from "../data/mockFiles";
 import { mockChanges, totalStats, type MockChange } from "../data/mockChanges";
 
-export type RailTab = "files" | "terminal" | "changes";
+export type RailTab = "files" | "terminal" | "changes" | "context";
 
 type Props = {
   activeTab: RailTab;
@@ -13,8 +13,8 @@ type Props = {
 };
 
 const TABS: Array<{ id: RailTab; label: string; icon: React.ReactNode }> = [
-  { id: "files", label: "Files", icon: <Files size={13} /> },
-  { id: "terminal", label: "Terminal", icon: <Terminal size={13} /> },
+  { id: "context", label: "Context", icon: <Files size={13} /> },
+  { id: "files", label: "Files", icon: <Terminal size={13} /> },
   { id: "changes", label: "Changes", icon: <GitCompare size={13} /> },
 ];
 
@@ -35,16 +35,87 @@ export function RightRail({ activeTab, onActiveTab, onClose }: Props) {
             </button>
           ))}
         </div>
-        <button className="rail-close" onClick={onClose} title="Hide rail (⌘.)" aria-label="Hide rail">
+        <button className="rail-close" onClick={onClose} title="Hide rail" aria-label="Hide rail">
           <X size={13} />
         </button>
       </div>
       <div className="rail-body">
+        {activeTab === "context" && <ContextTab />}
         {activeTab === "files" && <FilesTab />}
         {activeTab === "terminal" && <TerminalTab />}
         {activeTab === "changes" && <ChangesTab />}
       </div>
     </aside>
+  );
+}
+
+// ---- Context tab (Style F) ------------------------------------------------
+
+function ContextTab() {
+  return (
+    <div className="context-tab">
+      <div className="context-tab-header">
+        <span>Context</span>
+      </div>
+      <div className="context-tab-body">
+        <div className="rr-card">
+          <div className="rr-card-head">Current file</div>
+          <div className="rr-card-body">
+            <div className="context-file">
+              <div className="context-file-icon">TS</div>
+              <div>
+                <div className="cf-name">App.tsx</div>
+                <div className="cf-path">src/App.tsx · 539 lines</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rr-card">
+          <div className="rr-card-head">Tokens this session</div>
+          <div className="rr-card-body">
+            <div className="token-bar"><div className="fill" style={{ width: "62%" }} /></div>
+            <div className="token-line"><span>9.3k / 15k</span><span>62%</span></div>
+          </div>
+        </div>
+
+        <div className="rr-card">
+          <div className="rr-card-head">Recent edits</div>
+          <div className="rr-card-body">
+            <div className="context-change-row">
+              <span className="cc-path">src/App.tsx</span>
+              <span className="cc-stats"><span className="add">+42</span> <span className="rem">-18</span></span>
+            </div>
+            <div className="context-change-row">
+              <span className="cc-path">src-tauri/src/lib.rs</span>
+              <span className="cc-stats"><span className="add">+8</span> <span className="rem">-22</span></span>
+            </div>
+            <div className="context-change-row">
+              <span className="cc-path">src/styles.css</span>
+              <span className="cc-stats"><span className="add">+12</span> <span className="rem">-4</span></span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rr-card">
+          <div className="rr-card-head">Tools · 3 calls</div>
+          <div className="rr-card-body" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="context-tool-row">
+              <span className="ct-name">read</span>
+              <span className="ct-time">142ms</span>
+            </div>
+            <div className="context-tool-row">
+              <span className="ct-name">edit</span>
+              <span className="ct-time">128ms</span>
+            </div>
+            <div className="context-tool-row">
+              <span className="ct-name ct-running">bash</span>
+              <span className="ct-time ct-running">running…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -55,7 +126,6 @@ function FilesTab() {
     <div className="files-tab">
       <div className="files-tab-header">
         <span className="files-tab-path">~/AI/pi-desktop</span>
-        <span className="files-tab-hint">⌘B to hide</span>
       </div>
       <div className="file-tree">
         {mockFiles.map((n) => (
@@ -106,7 +176,6 @@ function TerminalTab() {
     <div className="terminal-tab">
       <div className="terminal-tab-header">
         <span className="terminal-tab-title">zsh — ~/AI/pi-desktop</span>
-        <span className="terminal-tab-hint">⌘J to hide</span>
       </div>
       <div className="terminal-mock">
         <div className="terminal-line">Last login: today at 14:22 on ttys003</div>

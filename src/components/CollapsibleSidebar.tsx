@@ -1,12 +1,9 @@
-import { Plus, ListTree, Command } from "lucide-react";
+import { Command } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type Props = {
-  /** Item count badge (sessions) shown on the rail icon. */
-  badge?: number;
   /** When true, sidebar stays expanded; collapses only on explicit close. */
   locked?: boolean;
-  onNewChat: () => void;
   onOpenPalette: () => void;
   children: ReactNode;
 };
@@ -16,9 +13,7 @@ type Props = {
  * 240px. When `locked` is set, stays expanded and ignores mouse events.
  */
 export function CollapsibleSidebar({
-  badge,
   locked = false,
-  onNewChat,
   onOpenPalette,
   children,
 }: Props) {
@@ -50,15 +45,8 @@ export function CollapsibleSidebar({
     >
       <nav className="sidebar-rail" aria-hidden={expanded}>
         <div className="rail-logo" title="Pi">π</div>
-        <button className="rail-btn" onClick={onNewChat} title="New chat (⌘N)">
-          <Plus size={14} />
-        </button>
-        <button className="rail-btn" title="Sessions">
-          <ListTree size={14} />
-          {badge !== undefined && badge > 0 && <span className="rail-badge">{badge}</span>}
-        </button>
         <div className="rail-spacer" />
-        <button className="rail-btn" onClick={onOpenPalette} title="Command palette (⌘K)">
+        <button className="rail-btn" onClick={onOpenPalette} title="Command palette">
           <Command size={14} />
         </button>
       </nav>

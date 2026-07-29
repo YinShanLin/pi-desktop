@@ -412,8 +412,19 @@ pub fn run() {
             eprintln!("[pi-desktop] VOLC_ARK_API_KEY present: {}", std::env::var("VOLC_ARK_API_KEY").is_ok());
             eprintln!("[pi-desktop] PI_PROVIDER = {:?}", std::env::var("PI_PROVIDER").ok());
             eprintln!("[pi-desktop] tauri setup complete, ensuring main window is shown");
-            // Ensure main window is shown.
+            // Ensure main window is shown and sized correctly.
             if let Some(window) = app.get_webview_window("main") {
+                // Force window to predefined size to avoid config drift
+                use tauri::Size;
+                use tauri::LogicalSize;
+                let _ = window.set_size(Size::Logical(LogicalSize {
+                    width: 1100.0,
+                    height: 750.0,
+                }));
+                let _ = window.set_min_size(Some(Size::Logical(LogicalSize {
+                    width: 520.0,
+                    height: 400.0,
+                })));
                 let _ = window.show();
                 let _ = window.set_focus();
             }

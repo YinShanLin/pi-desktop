@@ -1,24 +1,22 @@
 # Pi Desktop
 
-A native macOS client for the [pi coding agent](https://pi.dev). Built with
-Tauri 2 + React 19 + TypeScript. Runs `pi` in a child process and brokers
+A native macOS desktop client for the [pi coding agent](https://pi.dev). Built
+with Tauri 2 + React 19 + TypeScript. Runs `pi` in a child process and brokers
 JSON-RPC traffic over its `pi --mode rpc` stdio interface.
 
-The UI is a minimal, WorkBuddy-inspired product shell: a single window with
-a collapsible left panel for sessions, a focused conversation area, a
-context rail on the right, and a ⌘K command palette for everything else.
-
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│ ●●● ⎋  π●   Session · refactor-imports ⌄        +   ⌘K   ⚙         │
-├──────────┬──────────────────────────────────────────┬───────────────┤
-│ sessions │  user:  refactor src/imports.ts          │  current file │
-│  • refa… │  assistant:  …                          │  changes      │
-│  • feat… │                                          │  tokens       │
-│          │  ⌘───────────────────────────────────    │  tools        │
-│          │  📁 pi-desktop  minimax/M3 · medium ⌄   │               │
-│          │  Ask anything…                            │               │
-└──────────┴──────────────────────────────────────────┴───────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│ ●●●   π · ~/my-project                             ＋      ⚙        │
+├──────────┬───────────────────────────────────────────┬──────────────┤
+│ sessions │  user:  refactor src/imports.ts           │  Files        │
+│  Today   │  assistant:  …                            │  src/         │
+│  • refa… │                                           │  ├── main.ts  │
+│  • feat… │  ────────────────────────────              │  ├── utils/   │
+│  • add…  │  minimax/M3 · medium ⌄                    │  └── types…  │
+│          │  Ask anything…                             │              │
+├──────────┴───────────────────────────────────────────┴──────────────┤
+│ ● ready  ~/my-project  minimax/M3  medium  1.2k tokens  12 msgs    │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Architecture
@@ -26,7 +24,8 @@ context rail on the right, and a ⌘K command palette for everything else.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ Renderer (React 19, WebKit WebView)                          │
-│   Chat UI · tool cards · session list · ⌘K palette · rail    │
+│   Chat UI · tool cards · session list · file tree · rail     │
+│   Settings · theme toggle · persistent sessions & messages    │
 └──────────────────────────┬───────────────────────────────────┘
                            │ Tauri IPC (invoke / emit)
 ┌──────────────────────────┴───────────────────────────────────┐
@@ -40,27 +39,43 @@ context rail on the right, and a ⌘K command palette for everything else.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The `pi.ts` renderer-side facade is the seam where we will later swap
-RPC for the in-process Node SDK if we need features that RPC cannot
-express (dynamic tool registration, runtime message mutation, sub-agents).
+## Features
 
-## Performance posture
+### Agent
+- Auto-start `pi` on app launch — no manual Start button
+- Stream assistant text and thinking deltas (rAF batched)
+- Tool call cards (read, edit, bash, write, etc.) with args and results
+- Abort running operations
+- Extension UI dialogs (select / confirm / input / editor)
+- Notifications (`notify`), status, title, editor prefills
+- Working directory picker (native macOS folder dialog)
+- Model selector dropdown + Thinking level chips
 
-- **rAF batched streaming.** `text_delta` and `thinking_delta` events are
-  coalesced into a single `setState` per animation frame, so a fast model
-  does not flood React with renders. Streamed text append is O(1) per
-  token; the `MessageRow` is `React.memo` so off-screen rows never
-  re-render.
-- **Hot path is clean.** The Rust stdout reader uses a 64 KB buffered
-  `read_line` (no `chars().count()` scans, no per-line `eprintln!` in
-  release) and emits a single IPC event per JSONL line.
-- **Compositor friendly.** The five always-on chrome surfaces (titlebar,
-  sidebar, rail, status bar, composer) use solid colors only. Backdrop
-  blur is reserved for transient overlays (modals, dropdowns) where it
-  is paid for exactly once.
-- **Lean bundle.** `@monaco-editor/react`, `@xterm/xterm`, and `fuse.js`
-  were dropped — none were wired in. Vite splits `vendor-react` and
-  targets `esnext`; dead code is gone.
+### Sessions & Workspace
+- Session sidebar: New chat, search, Quick Actions, collapsible groups
+- Per-session message persistence (localStorage), auto-save on stream end
+- Per-session token estimate
+- Folder switching bound to sessions — switch directory switches chat
+- Session rows with unread dot, relative time, message count, diff stats
+- Right-click context menu (Archive / Delete / Copy title)
+- Command palette placeholder (⌘K, coming in Phase 2)
+
+### File Tree
+- Real filesystem browsing via `tauri-plugin-fs` `readDir`
+- Integrated in sidebar (Sessions/Files view toggle) — ZCode-inspired
+- Expandable/collapsible directories with tree indicators
+
+### UI & Shell
+- Apple Design aesthetic: rounded window (12px), traffic lights, frosted glass
+- Three-pane layout: sidebar · main · right rail (resizable)
+- Right rail: Files / Terminal / Changes tabs (mock, real integration pending)
+- Status bar: connection status, cwd, model, thinking level, tokens, messages
+- Dark + Light theme via Settings dialog (localStorage persisted)
+- macOS native transparent window with drag via `startDragging()`
+- Spring animations, reduced-motion & reduced-transparency a11y
+- Keyboard shortcuts: ⌘N new chat · ⌘B Files · ⌘J Terminal · ⌘. toggle rail
+  · ⌘[ / ⌘] cycle sessions · ⌘, Settings · ⌘K palette
+- π brand icon set (.icns, .ico, 17 PNGs)
 
 ## Requirements
 
@@ -84,8 +99,8 @@ pnpm tauri dev      # launches the Mac app in debug mode
 ```
 
 `pnpm tauri dev` runs Vite on `localhost:1420` and opens a WebView
-window that loads it. The Rust process spawns `pi --mode rpc` as a
-child when you click **Start pi** in the UI.
+window that loads it. The Rust process auto-spawns `pi --mode rpc` as a
+child process on launch.
 
 ## Production build
 
@@ -93,47 +108,16 @@ child when you click **Start pi** in the UI.
 pnpm tauri build    # produces .app and .dmg in src-tauri/target/release/bundle/
 ```
 
-## Features
-
-### Agent
-
-- [x] Spawn and stop `pi --mode rpc` from the UI
-- [x] Stream assistant text and thinking deltas (rAF batched)
-- [x] Tool call cards (read, edit, bash, write, etc.) with args and results
-- [x] Abort running operations
-- [x] Extension UI dialogs (select / confirm / input / editor)
-- [x] Notifications (`notify`), status, title, editor prefills
-- [x] Working directory picker (native folder dialog)
-
-### Sessions
-
-- [x] Session sidebar (new, switch, archive, delete)
-- [x] Session search and quick switch
-- [x] Per-session message persistence (localStorage)
-- [x] Per-session token estimate
-- [x] Model selector with provider list
-- [x] Thinking level selector
-- [x] ⌘K command palette (commands + sessions, fuzzy)
-
-### Shell
-
-- [x] Collapsible left panel (hover-expand, ⌘\\ to lock)
-- [x] Context rail on the right (files, changes, tools, tokens)
-- [x] Status bar (only visible on error / progress)
-- [x] Dark + light theme
-- [x] ⌘N new chat · ⌘. abort · ⌘, settings · ⌘[ / ⌘] cycle sessions
-- [x] macOS window chrome with bright traffic lights
-- [x] π brand icon set (.icns, .ico, 17 PNGs)
-
 ## Roadmap
 
-- [ ] xterm.js terminal panel
-- [ ] Monaco-based file viewer with diff for `edit` calls
-- [ ] Settings (provider credentials via macOS Keychain)
+- [ ] xterm.js terminal panel (real shell, shared cwd)
+- [ ] Right rail: real file tree + git-aware changes tab
+- [ ] Command palette (⌘K) with fuzzy search
+- [ ] Tool card inline diff (Monaco)
+- [ ] Settings: provider credentials via macOS Keychain
 - [ ] Global hotkey (Raycast-style)
-- [ ] Menu bar widget
 - [ ] Auto-update via `tauri-plugin-updater`
-- [ ] Files & Models categories in ⌘K
+- [ ] Session RPC sync (server ↔ localStorage)
 
 ## Project layout
 
@@ -144,11 +128,11 @@ pi-desktop/
 │   ├── main.tsx               # React entry
 │   ├── pi.ts                  # Tauri IPC facade
 │   ├── types.ts               # Shared message / event types
-│   ├── styles.css             # Design tokens + all CSS
+│   ├── styles.css             # Design tokens + all CSS (dark + light)
 │   ├── components/            # Titlebar, Sidebar, Composer, …
 │   ├── hooks/                 # useResizable, useShortcuts, useTheme
 │   ├── lib/shortcuts.ts       # Centralized shortcut table
-│   └── data/                  # Message / session / change stores
+│   └── data/                  # sessionStore, messageStore
 ├── src-tauri/                 # Rust main process
 │   ├── src/
 │   │   ├── main.rs            # entry (delegates to lib::run)
@@ -159,12 +143,14 @@ pi-desktop/
 │   └── capabilities/
 │       └── default.json       # permission set
 ├── scripts/
-│   └── generate-icon.py       # Regenerate the π icon set
+│   ├── generate-icon.py       # Regenerate the π icon set
+│   ├── generate-pi-icon.py    # SVG-based icon generator
+│   └── icon-variants.py       # Variant icon builder
 ├── docs/                      # Design proposals / mockups
+│   ├── icons/                 # Icon concept art
+│   └── layout-diagram.html    # Interactive layout diagram
 ├── index.html
 ├── package.json
-├── pnpm-workspace.yaml
-├── vite.config.ts
 └── tsconfig.json
 ```
 
