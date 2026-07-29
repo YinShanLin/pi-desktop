@@ -124,56 +124,65 @@ fn start_pi(
     let stdout = child.stdout.take().ok_or("Failed to capture pi stdout")?;
     let stderr = child.stderr.take().ok_or("Failed to capture pi stderr")?;
 
-    // stderr -> log only (diagnostic).
+    // stderr -> log only (diagnostic, debug builds only).
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
-            eprintln!("[pi stderr] {}", line);
+            if cfg!(debug_assertions) {
+                eprintln!("[pi stderr] {}", line);
+            }
         }
     });
 
     // stdout -> parse JSONL, emit "pi:event" for each line.
+    // Hot path: during streaming this loop runs per token, so it stays
+    // allocation- and log-free in release builds.
     let app_for_reader = app.clone();
     thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        eprintln!("[pi-desktop] stdout reader thread started");
+        let mut reader = BufReader::with_capacity(64 * 1024, stdout);
+        if cfg!(debug_assertions) {
+            eprintln!("[pi-desktop] stdout reader thread started");
+        }
         let mut count: u64 = 0;
-        for line in reader.lines().map_while(Result::ok) {
-            count += 1;
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) => break, // EOF: child closed stdout
+                Ok(_) => {}
+                Err(_) => break,
+            }
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
             }
+            count += 1;
             match serde_json::from_str::<serde_json::Value>(trimmed) {
                 Ok(value) => {
-                    // Truncate the raw line for readable logs.
-                    let preview: String = trimmed.chars().take(200).collect::<String>()
-                        + if trimmed.chars().count() > 200 { "…" } else { "" };
-                    eprintln!("[pi:line {}] {}", count, preview);
-                    // Extract a short label for the log line, owned so we can
-                    // use it after `value` is moved into emit().
-                    let label: String = value
-                        .get("type")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| "?".to_string());
+                    if cfg!(debug_assertions) {
+                        let preview: String = trimmed.chars().take(200).collect::<String>()
+                            + if trimmed.len() > 200 { "…" } else { "" };
+                        eprintln!("[pi:line {}] {}", count, preview);
+                    }
                     if let Err(e) = app_for_reader.emit("pi:event", value) {
                         eprintln!("[pi emit error] {}", e);
-                    } else {
-                        eprintln!("[pi:emit] type={} (line {})", label, count);
                     }
                 }
                 Err(err) => {
+                    // Protocol drift is always worth logging, but keep the
+                    // preview cheap: no O(n) char count on the full line.
                     let preview: String = trimmed.chars().take(200).collect::<String>()
-                        + if trimmed.chars().count() > 200 { "…" } else { "" };
+                        + if trimmed.len() > 200 { "…" } else { "" };
                     eprintln!("[pi json parse error] {} :: {}", err, preview);
                 }
             }
         }
-        eprintln!(
-            "[pi-desktop] stdout reader thread exiting after {} lines (stream closed)",
-            count
-        );
+        if cfg!(debug_assertions) {
+            eprintln!(
+                "[pi-desktop] stdout reader thread exiting after {} lines (stream closed)",
+                count
+            );
+        }
         // Stream closed -> tell UI the agent has exited.
         let _ = app_for_reader.emit("pi:event", serde_json::json!({
             "type": "pi_exit",
@@ -375,8 +384,8 @@ fn show_main_window(app: AppHandle) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(PiBackend::new())
         .invoke_handler(tauri::generate_handler![
             get_status,

@@ -32,3 +32,8 @@ src-tauri/WixTools
 # Local pi session data (should never be committed)
 .pi-desktop-sessions
 *.session.jsonl
+
+# WorkBuddy workspace notes (local-only, never committed)
+.workbuddy/
+2026-07-29.md
+PROGRESS.md

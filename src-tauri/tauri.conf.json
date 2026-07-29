@@ -10,17 +10,20 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Pi Desktop",
         "width": 1100,
         "height": 750,
         "minWidth": 720,
-        "minHeight": 480
+        "minHeight": 480,
+        "decorations": false,
+        "transparent": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src ipc: http://ipc.localhost http://localhost:*; script-src 'self'"
     }
   },
   "bundle": {
