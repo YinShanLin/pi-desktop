@@ -39,6 +39,28 @@ JSON-RPC traffic over its `pi --mode rpc` stdio interface.
 └──────────────────────────────────────────────────────────────┘
 ```
 
+## Design
+
+The app follows **Style F** (WorkBuddy-inspired) — see the full interactive
+design spec at [`docs/style-f-workbuddy.html`](docs/style-f-workbuddy.html).
+
+### Key design decisions
+
+| Principle | Detail |
+|-----------|--------|
+| **Palette** | Dark base `#1a1a1f` (blue-tinted grey, not pure black). Sidebar `#232329` (~1.7% lighter than base) for one-stop depth. |
+| **Typography** | 14.5px UI / 12.5px mono caption, system fonts (SF Pro). |
+| **Radius** | 10px max (composer container), 4-6px elsewhere. |
+| **Active state** | Accent-soft tint + accent text — never grey. One glance tells you where you are. |
+| **Send button** | Solid accent background + white text + embedded ⏎ arrow chip. |
+| **Composer** | Caption pills (999px radius) for cwd and model — visually consistent with session pill. |
+| **Right rail** | Hidden by default; ⌘. reveals it. Context / Files / Changes tabs with real content (current file, token progress, recent edits, tool call history). |
+| **Animations** | All under 200ms ease-out; rail slides in from right; pulse breathing on active session. |
+
+Open `docs/style-f-workbuddy.html` in a browser to see three layout states
+(sidebar collapsed, sidebar expanded, right rail open) with full CSS and
+annotations.
+
 ## Features
 
 ### Agent
@@ -147,8 +169,10 @@ pi-desktop/
 │   ├── generate-pi-icon.py    # SVG-based icon generator
 │   └── icon-variants.py       # Variant icon builder
 ├── docs/                      # Design proposals / mockups
+│   ├── style-f-workbuddy.html # Full design spec (Style F)
+│   ├── layout-diagram.html    # Interactive layout diagram
 │   ├── icons/                 # Icon concept art
-│   └── layout-diagram.html    # Interactive layout diagram
+│   └── style-e-mockup.html    # Early style mockup
 ├── index.html
 ├── package.json
 └── tsconfig.json
