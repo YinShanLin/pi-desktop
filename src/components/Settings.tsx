@@ -1,31 +1,54 @@
-import { Moon, Sun, X } from "lucide-react";
-import { useEffect, useRef } from "react";
-import type { FontChoice } from "../hooks/useFont";
+import { Moon, Plus, Sun, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { ModelOption } from "../types";
 
 type Props = {
   theme: "dark" | "light";
   onToggleTheme: () => void;
-  font: FontChoice;
-  onSetFont: (f: FontChoice) => void;
+  font: string;
+  availableFonts: string[];
+  onSetFont: (f: string) => void;
+  userModels: ModelOption[];
+  onAddModel: (m: ModelOption) => void;
+  onRemoveModel: (provider: string, id: string) => void;
   onClose: () => void;
 };
 
-const FONT_OPTIONS: Array<{ id: FontChoice; label: string; sample: string }> = [
-  { id: "system", label: "System", sample: "Aa" },
-  { id: "rounded", label: "Rounded", sample: "Aa" },
-  { id: "serif", label: "Serif", sample: "Aa" },
-];
-
-export function Settings({ theme, onToggleTheme, font, onSetFont, onClose }: Props) {
+export function Settings({ theme, onToggleTheme, font, availableFonts, onSetFont, userModels, onAddModel, onRemoveModel, onClose }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const fontListRef = useRef<HTMLDivElement | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newProvider, setNewProvider] = useState("");
+  const [newModelId, setNewModelId] = useState("");
+  const [newName, setNewName] = useState("");
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        if (showAddForm) { setShowAddForm(false); return; }
+        onClose();
+      }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [onClose]);
+  }, [onClose, showAddForm]);
+
+  useEffect(() => {
+    if (!fontListRef.current) return;
+    const active = fontListRef.current.querySelector(".active");
+    if (active) active.scrollIntoView({ block: "nearest" });
+  }, [font]);
+
+  const handleAdd = () => {
+    const provider = newProvider.trim();
+    const id = newModelId.trim();
+    if (!provider || !id) return;
+    onAddModel({ provider, id, name: newName.trim() || undefined });
+    setNewProvider("");
+    setNewModelId("");
+    setNewName("");
+    setShowAddForm(false);
+  };
 
   return (
     <div className="settings-backdrop" onClick={onClose}>
@@ -60,21 +83,55 @@ export function Settings({ theme, onToggleTheme, font, onSetFont, onClose }: Pro
 
           <div className="settings-section">
             <div className="settings-section-label">Font</div>
-            <div className="font-picker" role="radiogroup" aria-label="Font family">
-              {FONT_OPTIONS.map((opt) => (
+            <div className="font-picker" ref={fontListRef} role="listbox" aria-label="Font family">
+              {availableFonts.map((f) => (
                 <button
-                  key={opt.id}
-                  className={`font-pick ${font === opt.id ? "active" : ""}`}
-                  onClick={() => onSetFont(opt.id)}
-                  role="radio"
-                  aria-checked={font === opt.id}
-                  title={opt.label}
+                  key={f}
+                  className={`font-pick ${font === f ? "active" : ""}`}
+                  onClick={() => onSetFont(f)}
+                  role="option"
+                  aria-selected={font === f}
                 >
-                  <span className={`font-pick-sample font-sample-${opt.id}`}>{opt.sample}</span>
-                  <span className="font-pick-label">{opt.label}</span>
+                  <span className="font-pick-preview" style={{ fontFamily: f }}>Aa</span>
+                  <span className="font-pick-name">{f}</span>
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="settings-section">
+            <div className="settings-section-label">Models</div>
+            <div className="model-list">
+              {userModels.length === 0 && (
+                <div className="model-empty">No custom models configured.</div>
+              )}
+              {userModels.map((m) => (
+                <div key={`${m.provider}/${m.id}`} className="model-row">
+                  <div className="model-row-info">
+                    <span className="model-row-name">{m.name ?? m.id}</span>
+                    <span className="model-row-provider">{m.provider}/{m.id}</span>
+                  </div>
+                  <button className="model-row-remove" onClick={() => onRemoveModel(m.provider, m.id)} aria-label="Remove model">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {showAddForm ? (
+              <div className="model-add-form">
+                <input className="model-input" placeholder="Provider (e.g. openai)" value={newProvider} onChange={(e) => setNewProvider(e.target.value)} />
+                <input className="model-input" placeholder="Model ID (e.g. gpt-4o)" value={newModelId} onChange={(e) => setNewModelId(e.target.value)} />
+                <input className="model-input" placeholder="Display name (optional)" value={newName} onChange={(e) => setNewName(e.target.value)} />
+                <div className="model-add-actions">
+                  <button className="btn small ghost" onClick={() => setShowAddForm(false)}>Cancel</button>
+                  <button className="btn small" onClick={handleAdd} disabled={!newProvider.trim() || !newModelId.trim()}>Add</button>
+                </div>
+              </div>
+            ) : (
+              <button className="btn small ghost model-add-btn" onClick={() => setShowAddForm(true)}>
+                <Plus size={12} /> Add model
+              </button>
+            )}
           </div>
         </div>
       </div>

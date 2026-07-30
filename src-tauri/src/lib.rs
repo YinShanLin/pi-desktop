@@ -26,6 +26,7 @@ struct PiBackendInner {
     child: Option<Child>,
     stdin: Option<ChildStdin>,
     cwd: Option<String>,
+    session_id: Option<String>,
 }
 
 impl PiBackend {
@@ -35,6 +36,7 @@ impl PiBackend {
                 child: None,
                 stdin: None,
                 cwd: None,
+                session_id: None,
             }),
         }
     }
@@ -82,8 +84,9 @@ fn start_pi(
     backend: State<'_, PiBackend>,
     app: AppHandle,
     cwd: String,
+    session_id: Option<String>,
 ) -> Result<BackendStatus, String> {
-    eprintln!("[pi-desktop] start_pi called: cwd={}", cwd);
+    eprintln!("[pi-desktop] start_pi called: cwd={} session_id={:?}", cwd, session_id);
     let mut guard = backend.inner.lock().map_err(|e| e.to_string())?;
 
     // If already running, stop it first (idempotent restart on cwd change).
@@ -104,11 +107,22 @@ fn start_pi(
     command
         .arg("--mode")
         .arg("rpc")
-        .arg("--no-session")
         .current_dir(&cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // If we know a session ID, resume it; otherwise start fresh.
+    match &session_id {
+        Some(sid) => {
+            command.arg("--session-id").arg(sid);
+            eprintln!("[pi-desktop] resuming session: {}", sid);
+        }
+        None => {
+            command.arg("--no-session");
+            eprintln!("[pi-desktop] starting with --no-session");
+        }
+    }
 
     // Inherit minimal env so pi can read ANTHROPIC_API_KEY etc.
     command.env_remove("RUST_LOG");
@@ -169,8 +183,6 @@ fn start_pi(
                     }
                 }
                 Err(err) => {
-                    // Protocol drift is always worth logging, but keep the
-                    // preview cheap: no O(n) char count on the full line.
                     let preview: String = trimmed.chars().take(200).collect::<String>()
                         + if trimmed.len() > 200 { "…" } else { "" };
                     eprintln!("[pi json parse error] {} :: {}", err, preview);
@@ -192,6 +204,7 @@ fn start_pi(
     guard.child = Some(child);
     guard.stdin = Some(stdin);
     guard.cwd = Some(cwd);
+    guard.session_id = session_id;
 
     Ok(BackendStatus {
         running: true,
@@ -285,6 +298,31 @@ fn new_session(backend: State<'_, PiBackend>) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn switch_session(backend: State<'_, PiBackend>, session_id: String) -> Result<(), String> {
+    send_rpc_command(
+        backend,
+        serde_json::json!({
+            "type": "switch_session",
+            "sessionId": session_id,
+        }),
+    )
+}
+
+#[tauri::command]
+fn get_session_messages(backend: State<'_, PiBackend>) -> Result<(), String> {
+    send_rpc_command(
+        backend,
+        serde_json::json!({ "type": "get_session_messages" }),
+    )
+}
+
+#[tauri::command]
+fn get_session_id(backend: State<'_, PiBackend>) -> Result<Option<String>, String> {
+    let guard = backend.inner.lock().map_err(|e| e.to_string())?;
+    Ok(guard.session_id.clone())
+}
+
+#[tauri::command]
 fn set_thinking_level(backend: State<'_, PiBackend>, level: String) -> Result<(), String> {
     send_rpc_command(
         backend,
@@ -363,6 +401,151 @@ fn which_pi() -> Option<String> {
     None
 }
 
+// ---------- Session migration (Phase 3) ----------
+
+#[derive(Debug, Deserialize)]
+struct MigrateMessage {
+    role: String,
+    content: String,
+}
+
+/// Write (or overwrite) a Pi session JSONL file with header + messages.
+/// Finds the file by scanning `~/.pi/agent/sessions/` for `<session_id>.jsonl`.
+/// If not found, creates one under `~/.pi/agent/sessions/<hex-cwd>/`.
+#[tauri::command]
+fn migrate_session_messages(
+    session_id: String,
+    cwd: String,
+    messages: Vec<MigrateMessage>,
+) -> Result<(), String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME not set".to_string())?;
+    let base = std::path::Path::new(&home).join(".pi/agent/sessions");
+
+    // Try to find existing session file (avoids guessing the cwd encoding)
+    let session_file = find_session_file(&base, &session_id).unwrap_or_else(|| {
+        // Fallback: create directory using hex-encoded cwd
+        let encoded = hex_encode(cwd.as_bytes());
+        let dir = base.join(&encoded);
+        let _ = std::fs::create_dir_all(&dir);
+        dir.join(format!("{}.jsonl", session_id))
+    });
+
+    let mut file = std::fs::File::create(&session_file)
+        .map_err(|e| format!("Failed to create session file: {}", e))?;
+
+    // Session header (first line of every Pi .jsonl)
+    let header = serde_json::json!({
+        "type": "session",
+        "version": 3,
+        "id": session_id,
+        "timestamp": iso_timestamp(),
+        "cwd": cwd,
+    });
+    writeln!(file, "{}", serde_json::to_string(&header).unwrap())
+        .map_err(|e| e.to_string())?;
+
+    // Message entries — chain via parentId
+    let mut parent_id: Option<String> = None;
+    for msg in &messages {
+        let mid = generate_id();
+        let entry = serde_json::json!({
+            "type": "message",
+            "id": mid,
+            "parentId": parent_id,
+            "timestamp": iso_timestamp(),
+            "message": {
+                "role": msg.role,
+                "content": msg.content,
+            },
+        });
+        writeln!(file, "{}", serde_json::to_string(&entry).unwrap())
+            .map_err(|e| e.to_string())?;
+        parent_id = Some(mid);
+    }
+
+    eprintln!(
+        "[pi-desktop] migrated {} messages to session {} at {:?}",
+        messages.len(),
+        session_id,
+        session_file
+    );
+    Ok(())
+}
+
+fn find_session_file(base: &std::path::Path, session_id: &str) -> Option<std::path::PathBuf> {
+    let target = format!("{}.jsonl", session_id);
+    walk_for_file(base, &target)
+}
+
+fn walk_for_file(dir: &std::path::Path, target: &str) -> Option<std::path::PathBuf> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries {
+        let entry = entry.ok()?;
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = walk_for_file(&path, target) {
+                return Some(found);
+            }
+        } else if path.is_file() {
+            if path.file_name().map(|n| n.to_string_lossy()) == Some(target.into()) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+fn generate_id() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let h = format!("{:032x}", nanos);
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
+fn iso_timestamp() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let d = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let total_secs = d.as_secs();
+
+    // days since 1970-01-01
+    let days = total_secs / 86400;
+    let time_secs = total_secs % 86400;
+    let hours = time_secs / 3600;
+    let minutes = (time_secs % 3600) / 60;
+    let seconds = time_secs % 60;
+
+    // Gregorian calendar: year/month/day from days since epoch
+    let mut y = 1970i64;
+    let mut rem = days as i64;
+    loop {
+        let diy = if is_leap(y) { 366 } else { 365 };
+        if rem < diy { break; }
+        rem -= diy;
+        y += 1;
+    }
+    let month_days = [31, if is_leap(y) { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut m = 0usize;
+    for (i, &md) in month_days.iter().enumerate() {
+        if rem < md { m = i + 1; break; }
+        rem -= md;
+    }
+    if m == 0 { m = 12; rem = 30; }
+    let day = rem + 1;
+
+    format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, m, day, hours, minutes, seconds)
+}
+
+fn is_leap(y: i64) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
+
 #[tauri::command]
 fn frontend_log(level: String, message: String) {
     eprintln!("[frontend:{}] {}", level, message);
@@ -400,7 +583,11 @@ pub fn run() {
             get_state,
             get_available_models,
             new_session,
+            switch_session,
+            get_session_messages,
+            get_session_id,
             respond_extension_ui,
+            migrate_session_messages,
             frontend_log,
             show_main_window,
         ])

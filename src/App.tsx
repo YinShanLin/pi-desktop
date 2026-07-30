@@ -10,6 +10,7 @@ import type {
 import type { ModelOption } from "./types";
 import { sessionStore, type Session } from "./data/sessions";
 import { messageStore } from "./data/messages";
+import { loadUserModels, addUserModel, removeUserModel } from "./data/models";
 import { useResizable } from "./hooks/useResizable";
 import { useTheme } from "./hooks/useTheme";
 import { useFont } from "./hooks/useFont";
@@ -33,6 +34,12 @@ function defaultCwd(): string {
   return "/Users/" + (window.navigator.userAgent.includes("Mac") ? "ysl" : "you");
 }
 
+function messagesToPiFmt(msg: Message): { role: string; content: string } {
+  if (msg.kind === "user") return { role: "user", content: msg.text };
+  if (msg.kind === "assistant") return { role: "assistant", content: msg.text };
+  return { role: "tool", content: JSON.stringify({ name: msg.name, args: msg.args }) };
+}
+
 export default function App() {
   // ---- Connection & backend state ----------------------------------------
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
@@ -47,7 +54,7 @@ export default function App() {
 
   // ---- Theme & settings -------------------------------------------------
   const { theme, toggleTheme } = useTheme();
-  const { font, setFont } = useFont();
+  const { font, available: availableFonts, setFont } = useFont();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // ---- Session state ----------------------------------------------------
@@ -67,6 +74,32 @@ export default function App() {
   activeSessionIdRef.current = activeSessionId;
   const modelLabelRef = useRef(modelLabel);
   modelLabelRef.current = modelLabel;
+
+  // ---- User-defined models -------------------------------------------------
+  const [userModels, setUserModels] = useState<ModelOption[]>(() => loadUserModels());
+
+  const handleAddModel = useCallback((m: ModelOption) => {
+    addUserModel(m);
+    setUserModels(loadUserModels());
+  }, []);
+
+  const handleRemoveModel = useCallback((provider: string, id: string) => {
+    removeUserModel(provider, id);
+    setUserModels(loadUserModels());
+  }, []);
+
+  // Merged model list: user-defined models first, then Pi-provided models
+  const allModels = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: ModelOption[] = [];
+    for (const m of [...userModels, ...availableModels]) {
+      const key = `${m.provider}/${m.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(m);
+    }
+    return merged;
+  }, [userModels, availableModels]);
 
   // ---- Layout state -----------------------------------------------------
   const [railOpen, setRailOpen] = useState(false);
@@ -103,14 +136,14 @@ export default function App() {
   const rafScheduledRef = useRef(false);
 
   // ---- Restart pi backend for a new cwd ---------------------------------
-  const restartPi = useCallback(async (dir: string) => {
+  const restartPi = useCallback(async (dir: string, sessionId?: string) => {
     try { await pi.stopPi(); } catch (e) { pi.frontendLog("warn", `[restartPi] stopPi failed: ${String(e)}`); }
     setModelLabel("(no model)");
     setThinkingLevel("");
     setAvailableModels([]);
     setStatus("disconnected");
     try {
-      await pi.startPi(dir);
+      await pi.startPi(dir, sessionId);
       setStatus("ready");
       pi.getState().catch(() => {});
       pi.getAvailableModels().catch(() => {});
@@ -142,7 +175,8 @@ export default function App() {
   }, [saveActiveMessages]);
 
   // ---- Switch active session: sync cwd, load messages, restart pi -------
-  const switchToSession = useCallback((sessionId: string) => {
+  const switchToSession = useCallback(async (sessionId: string) => {
+    hasPromptedRef.current = false;
     const all = sessionStore.getAll();
     const session = all.find((s) => s.id === sessionId);
     if (!session) return;
@@ -153,10 +187,37 @@ export default function App() {
     refreshSessions();
 
     if (session.cwd !== cwdRef.current) {
+      let piSessionId = session.piSessionId;
+
+      // Migrate old session (no piSessionId yet but has local messages)
+      if (!piSessionId && status === "ready") {
+        const localMsgs = messageStore.load(sessionId);
+        if (localMsgs.length > 0) {
+          try {
+            await pi.stopPi();
+            setStatus("disconnected");
+            await pi.startPi(session.cwd);
+            setStatus("ready");
+            const resp = await pi.newSession() as { sessionId?: string } | undefined;
+            const newId = resp?.sessionId;
+            if (newId) {
+              await pi.migrateSessionMessages(newId, session.cwd, localMsgs.map(messagesToPiFmt));
+              sessionStore.update(sessionId, { piSessionId: newId });
+              refreshSessions();
+              piSessionId = newId;
+            }
+            await pi.stopPi();
+            setStatus("disconnected");
+          } catch (e) {
+            pi.frontendLog("warn", `Switch migration failed: ${String(e)}`);
+          }
+        }
+      }
+
       setCwd(session.cwd);
-      restartPi(session.cwd);
+      restartPi(session.cwd, piSessionId);
     }
-  }, [loadSession, refreshSessions, restartPi]);
+  }, [loadSession, refreshSessions, restartPi, status]);
 
   // ---- Initialize: find first active session or create one ---------------
   const initRef = useRef(false);
@@ -195,9 +256,38 @@ export default function App() {
           setCwd(s.cwd ?? cwdRef.current);
           return;
         }
-        return pi.startPi(cwdRef.current).then(() => {
+        // Find the most recent active session to resume its pi session
+        const active = sessionStore.getActive();
+        const sessionId = active.length > 0 ? active[0].piSessionId : undefined;
+        return pi.startPi(cwdRef.current, sessionId).then(async () => {
           if (!mounted) return;
           setStatus("ready");
+
+          // Migrate old session (localStorage → Pi session file)
+          try {
+            const first = sessionStore.getActive()[0];
+            if (first && !first.piSessionId) {
+              const localMsgs = messageStore.load(first.id);
+              if (localMsgs.length > 0) {
+                const resp = await pi.newSession() as { sessionId?: string } | undefined;
+                const newId = resp?.sessionId;
+                if (newId) {
+                  await pi.migrateSessionMessages(newId, first.cwd, localMsgs.map(messagesToPiFmt));
+                  sessionStore.update(first.id, { piSessionId: newId });
+                  refreshSessions();
+                  await pi.stopPi();
+                  if (mounted) {
+                    setStatus("disconnected");
+                    await pi.startPi(cwdRef.current, newId);
+                    setStatus("ready");
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            pi.frontendLog("warn", `Init migration failed: ${String(e)}`);
+          }
+
           pi.getState().catch(() => {});
           pi.getAvailableModels().catch(() => {});
         });
@@ -348,6 +438,9 @@ export default function App() {
       }
 
       case "response": {
+        // Route to pi.ts deferred response handlers (new_session, get_session_messages, etc.)
+        pi.handlePiResponse(event);
+
         if (event.success && event.data) {
           const data = event.data as Record<string, any>;
           if (event.command === "get_state" && data.model) {
@@ -357,6 +450,14 @@ export default function App() {
           }
           if (event.command === "get_available_models" && Array.isArray(data.models)) {
             setAvailableModels(data.models);
+          }
+          if (event.command === "new_session" && typeof data.sessionId === "string") {
+            // Pi created a new session — update the local session record
+            if (activeSessionIdRef.current) {
+              sessionStore.update(activeSessionIdRef.current, { piSessionId: data.sessionId });
+              refreshSessions();
+            }
+            // No need to restart pi — new_session RPC already switched context
           }
         }
         if (!event.success && event.error) {
@@ -372,12 +473,26 @@ export default function App() {
   }, [flushDeltas, scheduleDeltaFlush]);
 
   // ---- Session handlers -------------------------------------------------
-  const onNewChat = useCallback(() => {
-    const s = sessionStore.create("New chat", cwdRef.current, modelLabelRef.current);
-    switchToSession(s.id);
-    setNotice("New chat created");
-    setTimeout(() => setNotice(null), 2000);
-  }, [switchToSession]);
+  const onNewChat = useCallback(async () => {
+    try {
+      const responseData = await pi.newSession() as { sessionId?: string } | undefined;
+      const piSessionId = responseData?.sessionId;
+      const s = sessionStore.create("New chat", cwdRef.current, modelLabelRef.current, piSessionId);
+      // Restart pi with the new session ID so subsequent prompts have context
+      if (piSessionId) {
+        await restartPi(cwdRef.current, piSessionId);
+      }
+      switchToSession(s.id);
+      setNotice("New chat created");
+      setTimeout(() => setNotice(null), 2000);
+    } catch {
+      // Fallback: pi new_session failed, create local session only
+      const s = sessionStore.create("New chat", cwdRef.current, modelLabelRef.current);
+      switchToSession(s.id);
+      setNotice("New chat created");
+      setTimeout(() => setNotice(null), 2000);
+    }
+  }, [switchToSession, restartPi]);
 
   const onSelectSession = useCallback((id: string) => {
     switchToSession(id);
@@ -391,6 +506,13 @@ export default function App() {
     refreshSessions();
     setNotice(s.status === "active" ? "Archived" : "Restored");
     setTimeout(() => setNotice(null), 1500);
+  }, [sessions, refreshSessions]);
+
+  const onRenameSession = useCallback((id: string, title: string) => {
+    if (title.trim() && title.trim() !== (sessions.find((x) => x.id === id)?.title ?? "")) {
+      sessionStore.update(id, { title: title.trim() });
+      refreshSessions();
+    }
   }, [sessions, refreshSessions]);
 
   const onDeleteSession = useCallback((id: string) => {
@@ -425,7 +547,13 @@ export default function App() {
     if (existing) {
       switchToSession(existing.id);
     } else {
-      const s = sessionStore.create("New chat", dir, modelLabelRef.current);
+      // Try to get a Pi session ID for the new session
+      let piSessionId: string | undefined;
+      try {
+        const responseData = await pi.newSession() as { sessionId?: string } | undefined;
+        piSessionId = responseData?.sessionId;
+      } catch { /* pi may not be running — create local-only session */ }
+      const s = sessionStore.create("New chat", dir, modelLabelRef.current, piSessionId);
       switchToSession(s.id);
     }
 
@@ -439,8 +567,9 @@ export default function App() {
   }, []);
 
   const retryPi = useCallback(() => {
-    restartPi(cwdRef.current);
-  }, [restartPi]);
+    const session = activeSessionId ? sessionStore.getAll().find((s) => s.id === activeSessionId) : undefined;
+    restartPi(cwdRef.current, session?.piSessionId);
+  }, [restartPi, activeSessionId]);
 
   const setThinking = useCallback(async (level: string) => {
     try {
@@ -448,6 +577,9 @@ export default function App() {
       setThinkingLevel(level);
     } catch (e: any) { setError(String(e?.message ?? e)); }
   }, []);
+
+  // ---- Track whether this is the first prompt in a Pi session ----------
+  const hasPromptedRef = useRef(false);
 
   const send = useCallback(async () => {
     const text = input.trim();
@@ -457,7 +589,18 @@ export default function App() {
     setInput("");
     setStatus("busy");
     sessionStore.incrementMsgs(activeSessionIdRef.current);
-    try { await pi.sendPrompt(text); } catch (e: any) { setError(String(e?.message ?? e)); setStatus("ready"); }
+    try {
+      // Use follow_up for 2nd+ messages so Pi sees conversation history
+      if (hasPromptedRef.current) {
+        await pi.sendFollowUp(text);
+      } else {
+        hasPromptedRef.current = true;
+        await pi.sendPrompt(text);
+      }
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+      setStatus("ready");
+    }
   }, [input, status]);
 
   const abort = useCallback(async () => {
@@ -523,6 +666,7 @@ export default function App() {
               onNewChat={onNewChat}
               onArchive={onArchiveSession}
               onDelete={onDeleteSession}
+              onRename={onRenameSession}
               onOpenPalette={onOpenPalette}
               onToggleRail={() => setRailOpen((v) => !v)}
             />
@@ -545,7 +689,7 @@ export default function App() {
             onAbort={abort}
             modelLabel={modelLabel}
             thinkingLevel={thinkingLevel}
-            availableModels={availableModels}
+            availableModels={allModels}
             onSwitchModel={switchModel}
             onSetThinking={setThinking}
             cwd={cwd}
@@ -587,7 +731,7 @@ export default function App() {
       )}
 
       {settingsOpen && (
-        <Settings theme={theme} onToggleTheme={toggleTheme} font={font} onSetFont={setFont} onClose={() => setSettingsOpen(false)} />
+        <Settings theme={theme} onToggleTheme={toggleTheme} font={font} availableFonts={availableFonts} onSetFont={setFont} userModels={userModels} onAddModel={handleAddModel} onRemoveModel={handleRemoveModel} onClose={() => setSettingsOpen(false)} />
       )}
 
       {paletteOpen && (

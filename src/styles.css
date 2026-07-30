@@ -29,8 +29,8 @@
   --err:   #f87171;
 
   /* Type — system fonts, no SF Pro features */
-  --font-ui:   -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
-    sans-serif;
+  --font-ui:   var(--font-custom, -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
+    sans-serif);
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 
   /* Sizes — slightly larger for readability */
@@ -91,14 +91,6 @@
   --ease-in-out: var(--ease);
 }
 
-/* Font choices (system stacks only) */
-[data-font="rounded"] {
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif;
-}
-[data-font="serif"] {
-  --font-ui: -apple-system, BlinkMacSystemFont, "New York", "SF Pro Text", "Times New Roman", Georgia, serif;
-}
-
 /* ---------- Light theme ---------------------------------------------------- */
 
 [data-theme="light"] {
@@ -136,6 +128,13 @@
 [data-theme="light"] .dropdown-item:hover { background: rgba(0, 0, 0, 0.04); }
 [data-theme="light"] .dropdown-item:active { background: rgba(0, 0, 0, 0.08); }
 [data-theme="light"] .dropdown-badge { background: var(--bg-2); color: var(--fg-3); }
+[data-theme="light"] .quick-actions {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(0, 0, 0, 0.10);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+}
+[data-theme="light"] .quick-action-item:hover { background: rgba(0, 0, 0, 0.04); }
+[data-theme="light"] .quick-action-item:active { background: rgba(0, 0, 0, 0.08); }
 [data-theme="light"] .empty-card {
   background: rgba(255, 255, 255, 0.8);
   border-color: rgba(0, 0, 0, 0.08);
@@ -151,6 +150,12 @@
   background: rgba(255, 255, 255, 0.85);
   color: var(--fg);
 }
+[data-theme="light"] .context-menu {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(0, 0, 0, 0.10);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+}
+[data-theme="light"] .context-menu-item:hover { background: rgba(0, 0, 0, 0.04); }
 
 /* Reduced motion: disable all transitions globally. */
 @media (prefers-reduced-motion: reduce) {
@@ -246,52 +251,133 @@
 }
 
 .font-picker {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  padding-top: 2px;
-}
-.font-pick {
+  max-height: 220px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 4px 8px;
-  background: var(--bg-elev-2);
+  gap: 2px;
+  padding: 2px 0;
+  margin-top: 4px;
   border: 1px solid var(--border);
   border-radius: var(--r-2);
+  background: var(--bg-elev);
+}
+.font-picker::-webkit-scrollbar { width: 5px; }
+.font-picker::-webkit-scrollbar-thumb { background: var(--bg-elev-3); border-radius: 3px; }
+
+.font-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: 0;
   color: var(--text);
   cursor: pointer;
   font-family: var(--font-ui);
-  transition:
-    background var(--t-fast) var(--ease-smooth),
-    border-color var(--t-fast) var(--ease-smooth),
-    transform 80ms var(--ease-spring);
+  font-size: 13px;
+  text-align: left;
+  border-radius: 0;
+  transition: background var(--t-fast) var(--ease-smooth);
 }
-.font-pick:hover {
-  background: var(--bg-elev-3);
-  border-color: var(--border-strong);
-}
-.font-pick:active { transform: scale(0.97); transition-duration: 60ms; }
-.font-pick.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--fg);
-}
-.font-pick-sample {
-  font-size: 22px;
+.font-pick:hover { background: var(--bg-elev-2); }
+.font-pick.active { background: var(--accent-soft); color: var(--fg); }
+
+.font-pick-preview {
+  font-size: 16px;
   font-weight: 600;
-  line-height: 1;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
   color: var(--fg);
 }
-.font-sample-rounded { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Text", system-ui, sans-serif; }
-.font-sample-serif { font-family: -apple-system, BlinkMacSystemFont, "New York", "SF Pro Text", "Times New Roman", Georgia, serif; }
-.font-pick-label {
-  font-size: 11px;
-  color: var(--text-dim);
+
+.font-pick-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.font-pick.active .font-pick-name { color: var(--fg); }
+
+/* Model management */
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+.model-empty {
+  font-size: 13px;
+  color: var(--text-faint);
+  padding: 4px 0;
+}
+.model-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-elev-2);
+  border-radius: var(--r-2);
+}
+.model-row-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.model-row-name {
+  font-size: 13px;
+  color: var(--text);
   font-weight: 500;
 }
-.font-pick.active .font-pick-label { color: var(--fg); }
+.model-row-provider {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+.model-row-remove {
+  background: transparent;
+  border: 0;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background var(--t-fast) var(--ease-smooth);
+}
+.model-row-remove:hover { background: var(--danger-soft); color: var(--danger); }
+
+.model-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r-2);
+}
+.model-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-1);
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  outline: none;
+}
+.model-input:focus { border-color: var(--accent); }
+.model-input::placeholder { color: var(--text-faint); }
+.model-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 2px;
+}
+.model-add-btn { margin-top: 6px; }
 
 .settings-row {
   display: flex;
@@ -1270,6 +1356,19 @@ kbd {
   border-radius: 1px;
 }
 
+.session-rename-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 13px;
+  font-family: var(--font-ui);
+  color: var(--text);
+  outline: none;
+  box-shadow: none;
+}
+
 .session-row-main {
   flex: 1;
   min-width: 0;
@@ -1490,10 +1589,10 @@ kbd {
 .bubble {
   padding: 10px 14px;
   border-radius: 14px;
-  line-height: 1.55;
+  line-height: 1.6;
   word-wrap: break-word;
   overflow-wrap: anywhere;
-  font-size: 14.5px;
+  font-size: 15.5px;
   max-width: 100%;
 }
 
@@ -1519,14 +1618,12 @@ kbd {
 .user-bubble {
   background: var(--user-bubble);
   color: white;
-  border-bottom-right-radius: 4px;
   max-width: 82%;
 }
 
 .assistant-bubble {
   background: var(--assistant-bubble);
   color: var(--text);
-  border-bottom-left-radius: 4px;
   width: 100%;
 }
 
@@ -1538,7 +1635,7 @@ kbd {
 .markdown-body p:last-child { margin-bottom: 0; }
 .markdown-body code {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   background: var(--bg-1);
   padding: 1px 5px;
   border-radius: 3px;
@@ -1554,7 +1651,7 @@ kbd {
 .markdown-body pre code {
   background: transparent;
   padding: 0;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--fg-2);
 }
 .markdown-body ul, .markdown-body ol {
@@ -1652,7 +1749,6 @@ kbd {
 .tool-bubble {
   background: var(--tool-bubble);
   border: 1px solid var(--border);
-  border-radius: 10px;
   padding: 0;
   width: 100%;
   overflow: hidden;
