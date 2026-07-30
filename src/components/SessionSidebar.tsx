@@ -1,6 +1,6 @@
 import {
   Activity, ChevronDown, ChevronRight, Clipboard, Cpu,
-  FolderTree, Plus, Search, Terminal, Trash2, X, PanelRightClose,
+  FolderTree, Plus, Pencil, Search, Terminal, Trash2, X, PanelRightClose,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { relativeTime, type Session } from "../data/sessions";
@@ -14,6 +14,7 @@ type Props = {
   onNewChat: () => void;
   onArchive: (id: string) => void;
   onDelete: (id: string) => void;
+  onRename: (id: string, title: string) => void;
   onOpenPalette: () => void;
   onToggleRail: () => void;
 };
@@ -46,11 +47,13 @@ export function SessionSidebar({
   onNewChat,
   onArchive,
   onDelete,
+  onRename,
   onOpenPalette,
   onToggleRail,
 }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const searchRef = useRef<HTMLDivElement | null>(null);
   const ctxRef = useRef<HTMLDivElement | null>(null);
   const [focused, setFocused] = useState(false);
@@ -159,11 +162,16 @@ export function SessionSidebar({
                 </div>
                 {!isCollapsed && items.map((s) => (
                   <SessionRow
-                    key={s.id} session={s} isActive={activeId === s.id}
-                    onSelect={() => onSelect(s.id)}
+                    key={s.id}
+                    session={s}
+                    isActive={activeId === s.id}
+                    isRenaming={renamingId === s.id}
+                    onSelect={() => { setRenamingId(null); onSelect(s.id); }}
                     onArchive={() => onArchive(s.id)}
                     onDelete={() => onDelete(s.id)}
-                    onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, session: s }); }}
+                    onRenameConfirm={(title) => { onRename(s.id, title); setRenamingId(null); }}
+                    onRenameCancel={() => setRenamingId(null)}
+                    onContextMenu={(e) => { e.preventDefault(); setRenamingId(null); setContextMenu({ x: e.clientX, y: e.clientY, session: s }); }}
                   />
                 ))}
               </div>
@@ -179,11 +187,16 @@ export function SessionSidebar({
             </div>
             {archived.slice(0, 3).map((s) => (
               <SessionRow
-                key={s.id} session={s} isActive={activeId === s.id}
-                onSelect={() => onSelect(s.id)}
+                key={s.id}
+                session={s}
+                isActive={activeId === s.id}
+                isRenaming={renamingId === s.id}
+                onSelect={() => { setRenamingId(null); onSelect(s.id); }}
                 onArchive={() => onArchive(s.id)}
                 onDelete={() => onDelete(s.id)}
-                onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, session: s }); }}
+                onRenameConfirm={(title) => { onRename(s.id, title); setRenamingId(null); }}
+                onRenameCancel={() => setRenamingId(null)}
+                onContextMenu={(e) => { e.preventDefault(); setRenamingId(null); setContextMenu({ x: e.clientX, y: e.clientY, session: s }); }}
               />
             ))}
           </div>
@@ -208,6 +221,10 @@ export function SessionSidebar({
             <FolderTree size={12} />
             <span>{contextMenu.session.status === "active" ? "Archive" : "Restore"}</span>
           </button>
+          <button className="context-menu-item" onClick={() => { setRenamingId(contextMenu.session.id); setContextMenu(null); }}>
+            <Pencil size={12} />
+            <span>Rename</span>
+          </button>
           <button className="context-menu-item danger" onClick={() => { onDelete(contextMenu.session.id); setContextMenu(null); }}>
             <Trash2 size={12} />
             <span>Delete</span>
@@ -231,10 +248,43 @@ function SummaryCell({ icon, label, value }: { icon: React.ReactNode; label: str
   );
 }
 
-function SessionRow({ session, isActive, onSelect, onArchive, onDelete, onContextMenu }: {
-  session: Session; isActive: boolean; onSelect: () => void;
-  onArchive: () => void; onDelete: () => void; onContextMenu: (e: React.MouseEvent) => void;
+function SessionRow({ session, isActive, isRenaming, onSelect, onArchive, onDelete, onRenameConfirm, onRenameCancel, onContextMenu }: {
+  session: Session; isActive: boolean; isRenaming: boolean;
+  onSelect: () => void; onArchive: () => void; onDelete: () => void;
+  onRenameConfirm: (title: string) => void; onRenameCancel: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [editValue, setEditValue] = useState(session.title);
+
+  useEffect(() => {
+    if (isRenaming) {
+      setEditValue(session.title);
+      requestAnimationFrame(() => inputRef.current?.select());
+    }
+  }, [isRenaming, session.title]);
+
+  if (isRenaming) {
+    return (
+      <div className="session-row" onContextMenu={onContextMenu}>
+        <div className="session-row-main">
+          <input
+            ref={inputRef}
+            className="session-rename-input"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); onRenameConfirm(editValue.trim() || session.title); }
+              if (e.key === "Escape") { e.preventDefault(); onRenameCancel(); }
+            }}
+            onBlur={() => onRenameConfirm(editValue.trim() || session.title)}
+            autoFocus
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`session-row ${isActive ? "active" : ""}`} onClick={onSelect} onContextMenu={onContextMenu}
       role="button" tabIndex={0}

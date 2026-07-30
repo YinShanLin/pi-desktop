@@ -1,10 +1,3 @@
-// Pi Desktop - IPC client wrapping the Rust PiBackend.
-//
-// Renderer-side facade so React components never call `invoke` / `listen`
-// directly. This is the seam where we will later swap the RPC backend for
-// the in-process Node SDK if/when we need features that RPC cannot express
-// (dynamic tool registration, runtime message mutation, sub-agents, etc.).
-
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -21,12 +14,55 @@ export interface ImageContent {
   mimeType: string;
 }
 
+// ---- Deferred response helpers (for RPCs that return data) ---------------
+
+type Deferred<T> = { resolve: (v: T) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
+const deferred = new Map<string, Deferred<any>>();
+
+function defer<T>(key: string, timeoutMs = 10_000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      deferred.delete(key);
+      reject(new Error(`${key} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    deferred.set(key, { resolve, reject, timer });
+  });
+}
+
+function resolveDeferred(key: string, value: unknown) {
+  const d = deferred.get(key);
+  if (!d) return;
+  clearTimeout(d.timer);
+  deferred.delete(key);
+  d.resolve(value);
+}
+
+function rejectDeferred(key: string, err: Error) {
+  const d = deferred.get(key);
+  if (!d) return;
+  clearTimeout(d.timer);
+  deferred.delete(key);
+  d.reject(err);
+}
+
+/**
+ * Called by the event handler when a `response` event arrives from pi.
+ * Routes to the matching deferred promise by `command` name.
+ */
+export function handlePiResponse(event: { command: string; success: boolean; data?: unknown; error?: string }) {
+  if (event.success) {
+    resolveDeferred(`rpc:${event.command}`, event.data);
+  } else {
+    rejectDeferred(`rpc:${event.command}`, new Error(event.error ?? `${event.command} failed`));
+  }
+}
+
 // ---- Commands ----
 
 export const getStatus = () => invoke<BackendStatus>("get_status");
 
-export const startPi = (cwd: string) =>
-  invoke<BackendStatus>("start_pi", { cwd });
+export const startPi = (cwd: string, sessionId?: string) =>
+  invoke<BackendStatus>("start_pi", { cwd, sessionId: sessionId ?? null });
 
 export const stopPi = () => invoke<void>("stop_pi");
 
@@ -53,7 +89,28 @@ export const getState = () => invoke<unknown>("get_state");
 
 export const getAvailableModels = () => invoke<unknown>("get_available_models");
 
-export const newSession = () => invoke<void>("new_session");
+export const newSession = () => {
+  invoke<void>("new_session").catch((err) => {
+    rejectDeferred("rpc:new_session", err instanceof Error ? err : new Error(String(err)));
+  });
+  return defer<unknown>("rpc:new_session");
+};
+
+export const switchSession = (sessionId: string) =>
+  invoke<void>("switch_session", { sessionId });
+
+export const getSessionMessages = () => {
+  invoke<void>("get_session_messages");
+  return defer<unknown>("rpc:get_session_messages");
+};
+
+export const getSessionId = () => invoke<string | null>("get_session_id");
+
+export const migrateSessionMessages = (
+  sessionId: string,
+  cwd: string,
+  messages: { role: string; content: string }[],
+) => invoke<void>("migrate_session_messages", { sessionId, cwd, messages });
 
 export const respondExtensionUi = (
   id: string,

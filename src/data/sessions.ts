@@ -11,6 +11,7 @@ export type Session = {
   updatedAt: number;
   diffStats?: { added: number; removed: number };
   unread?: boolean;
+  piSessionId?: string;
 };
 
 const STORAGE_KEY = "pi.sessions";
@@ -52,7 +53,7 @@ export const sessionStore = {
     return load().filter((s) => s.status === "archived");
   },
 
-  create(title: string, cwd: string, model: string): Session {
+  create(title: string, cwd: string, model: string, piSessionId?: string): Session {
     const sessions = load();
     const now = Date.now();
     const s: Session = {
@@ -64,6 +65,7 @@ export const sessionStore = {
       status: "active",
       group: computeGroup(now),
       updatedAt: now,
+      piSessionId,
     };
     sessions.unshift(s);
     save(sessions);
